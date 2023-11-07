@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import config from 'src/utils/config';
+import { setContentTypeHeaders } from 'src/common/utils/headers-provider.util';
 import { AutoUpdatedStaticsProvider } from './providers/auto-updated-statics.provider';
 
 const SERVER_CONFIG = config.get('server');
@@ -18,6 +19,7 @@ const CONTENT_CONFIG = config.get('content');
       rootPath: join(PATH_CONFIG.guides),
       serveStaticOptions: {
         fallthrough: false,
+        setHeaders: setContentTypeHeaders
       },
     }),
     ServeStaticModule.forRoot({
@@ -25,6 +27,7 @@ const CONTENT_CONFIG = config.get('content');
       rootPath: join(PATH_CONFIG.tutorials),
       serveStaticOptions: {
         fallthrough: false,
+        setHeaders: setContentTypeHeaders
       },
     }),
     ServeStaticModule.forRoot({
@@ -32,6 +35,7 @@ const CONTENT_CONFIG = config.get('content');
       rootPath: join(PATH_CONFIG.customTutorials),
       serveStaticOptions: {
         fallthrough: false,
+        setHeaders: setContentTypeHeaders
       },
     }),
     ServeStaticModule.forRoot({
@@ -39,6 +43,7 @@ const CONTENT_CONFIG = config.get('content');
       rootPath: join(PATH_CONFIG.content),
       serveStaticOptions: {
         fallthrough: false,
+        setHeaders: setContentTypeHeaders
       },
     }),
     ServeStaticModule.forRoot({
@@ -46,6 +51,7 @@ const CONTENT_CONFIG = config.get('content');
       rootPath: join(PATH_CONFIG.defaultPlugins),
       serveStaticOptions: {
         fallthrough: false,
+        setHeaders: setContentTypeHeaders
       },
     }),
     ServeStaticModule.forRoot({
@@ -53,6 +59,7 @@ const CONTENT_CONFIG = config.get('content');
       rootPath: join(PATH_CONFIG.customPlugins),
       serveStaticOptions: {
         fallthrough: false,
+        setHeaders: setContentTypeHeaders
       },
     }),
     ServeStaticModule.forRoot({
@@ -60,6 +67,7 @@ const CONTENT_CONFIG = config.get('content');
       rootPath: join(PATH_CONFIG.pluginsAssets),
       serveStaticOptions: {
         fallthrough: false,
+        setHeaders: setContentTypeHeaders
       },
     }),
   ],

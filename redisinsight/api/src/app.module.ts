@@ -3,7 +3,6 @@ import {
   MiddlewareConsumer, Module, NestModule, OnModuleInit,
 } from '@nestjs/common';
 import { ServeStaticModule } from '@nestjs/serve-static';
-import { lookup } from 'mime-types'
 import { RouterModule } from 'nest-router';
 import { join } from 'path';
 import config from 'src/utils/config';
@@ -22,6 +21,7 @@ import { CoreModule } from 'src/core.module';
 import { AutodiscoveryModule } from 'src/modules/autodiscovery/autodiscovery.module';
 import { DatabaseImportModule } from 'src/modules/database-import/database-import.module';
 import { SingleUserAuthMiddleware } from 'src/common/middlewares/single-user-auth.middleware';
+import { setContentTypeHeaders } from 'src/common/utils/headers-provider.util';
 import { CustomTutorialModule } from 'src/modules/custom-tutorial/custom-tutorial.module';
 import { CloudModule } from 'src/modules/cloud/cloud.module';
 import { BrowserModule } from './modules/browser/browser.module';
@@ -67,12 +67,7 @@ const PATH_CONFIG = config.get('dir_path');
           rootPath: join(__dirname, '..', '..', '..', 'ui', 'dist'),
           exclude: ['/api/**', `${SERVER_CONFIG.customPluginsUri}/**`, `${SERVER_CONFIG.staticUri}/**`],
           serveStaticOptions: {
-            setHeaders(res, path, stat) {
-              let contentType = lookup(path);
-              if(contentType) {
-                res.type(contentType);
-              }
-            },
+            setHeaders: setContentTypeHeaders
           }
         }),
       ]
@@ -83,6 +78,7 @@ const PATH_CONFIG = config.get('dir_path');
       exclude: ['/api/**'],
       serveStaticOptions: {
         fallthrough: false,
+        setHeaders: setContentTypeHeaders
       },
     }),
     ServeStaticModule.forRoot({
@@ -91,6 +87,7 @@ const PATH_CONFIG = config.get('dir_path');
       exclude: ['/api/**'],
       serveStaticOptions: {
         fallthrough: false,
+        setHeaders: setContentTypeHeaders
       },
     }),
     StaticsManagementModule,

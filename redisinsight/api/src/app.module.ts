@@ -3,6 +3,7 @@ import {
   MiddlewareConsumer, Module, NestModule, OnModuleInit,
 } from '@nestjs/common';
 import { ServeStaticModule } from '@nestjs/serve-static';
+import { lookup } from 'mime-types'
 import { RouterModule } from 'nest-router';
 import { join } from 'path';
 import config from 'src/utils/config';
@@ -65,6 +66,14 @@ const PATH_CONFIG = config.get('dir_path');
         ServeStaticModule.forRoot({
           rootPath: join(__dirname, '..', '..', '..', 'ui', 'dist'),
           exclude: ['/api/**', `${SERVER_CONFIG.customPluginsUri}/**`, `${SERVER_CONFIG.staticUri}/**`],
+          serveStaticOptions: {
+            setHeaders(res, path, stat) {
+              let contentType = lookup(path);
+              if(contentType) {
+                res.type(contentType);
+              }
+            },
+          }
         }),
       ]
       : []),

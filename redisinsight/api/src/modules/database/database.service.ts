@@ -1,6 +1,8 @@
 import {
-  Injectable, InternalServerErrorException, Logger, NotFoundException,
+  Inject, Injectable, InternalServerErrorException, Logger, NotFoundException
 } from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
+import { AUTHORIZATION_ORACLE, IAuthorizationOracle } from '../auth-users/authorization-oracle.interface';
 import {
   isEmpty, omit, reject, sum, omitBy, isUndefined,
 } from 'lodash';
@@ -63,6 +65,7 @@ export class DatabaseService {
     private databaseFactory: DatabaseFactory,
     private analytics: DatabaseAnalytics,
     private eventEmitter: EventEmitter2,
+    @Inject(AUTHORIZATION_ORACLE) private authService: IAuthorizationOracle
   ) {}
 
   static isConnectionAffected(dto: object) {
@@ -97,7 +100,9 @@ export class DatabaseService {
   async list(): Promise<Database[]> {
     try {
       this.logger.log('Getting databases list');
-      return await this.repository.list();
+      
+      return (await this.repository.list())
+        .filter(database => this.authService.isRedisAccessAuthorized(database.name));
     } catch (e) {
       this.logger.error('Failed to get database instance list.', e);
       throw new InternalServerErrorException();

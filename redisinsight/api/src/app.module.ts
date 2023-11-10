@@ -7,6 +7,8 @@ import { RouterModule } from 'nest-router';
 import { join } from 'path';
 import config from 'src/utils/config';
 import { PluginModule } from 'src/modules/plugin/plugin.module';
+import { AuthUsersJwtModule } from 'src/modules/auth-users-jwt/auth-users-jwt.module';
+import { AuthUsersNoneModule } from 'src/modules/auth-users-none/auth-users-none.module';
 import { CommandsModule } from 'src/modules/commands/commands.module';
 import { WorkbenchModule } from 'src/modules/workbench/workbench.module';
 import { SlowLogModule } from 'src/modules/slow-log/slow-log.module';
@@ -34,6 +36,19 @@ import { routes } from './app.routes';
 
 const SERVER_CONFIG = config.get('server');
 const PATH_CONFIG = config.get('dir_path');
+const AUTHENTICATION_CONFIG = config.get('authentication');
+
+let authenticationModule = undefined;
+switch(AUTHENTICATION_CONFIG.type) {
+  case 'jwt':
+    authenticationModule = AuthUsersJwtModule.register();
+    break;
+  case 'none':
+    authenticationModule = AuthUsersNoneModule.register();
+    break;
+  default:
+    throw new Error('Invalid value "' + AUTHENTICATION_CONFIG.type + '" for authentication type. Possible values are: "jwt", "none".');
+}
 
 @Module({
   imports: [
@@ -60,6 +75,7 @@ const PATH_CONFIG = config.get('dir_path');
     DatabaseImportModule,
     TriggeredFunctionsModule,
     CloudModule.register(),
+    authenticationModule,
     ...(SERVER_CONFIG.staticContent
       ? [
         ServeStaticModule.forRoot({

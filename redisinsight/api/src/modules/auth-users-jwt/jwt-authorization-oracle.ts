@@ -23,6 +23,54 @@ export class JwtAuthorizationOracle implements AuthorizationOracle {
       return !!permissionsConfig.allowAccessToUnrecognizedRedises;
     }
     
-    return user.role && Array.isArray(user.role) && user.role.contains(permission);
+    if(!Array.isArray(permission)) {
+      return false;
+    }
+
+    let isAnyAccessGranted = false;
+    for(let i = 0; i < permission.length; i++) {
+      let permissionRule = permission[i];
+      let claimsToCheck = Object.keys(permissionRule);
+
+      let ruleSuccessful = true;
+      for(let j = 0; j < claimsToCheck.length; j++) {
+        let claimName = claimsToCheck[j];
+        let requiredClaimValue = permissionRule[claimName];
+        let actualClaimValue = user[claimName];
+
+        if(Array.isArray(requiredClaimValue)) {
+          if(!Array.isArray(actualClaimValue)) {
+            ruleSuccessful = false;
+            break;
+          } else {
+            for(let k = 0; k < requiredClaimValue.length; k++) {
+              if(!actualClaimValue.includes(requiredClaimValue[k])) {
+                ruleSuccessful = false;
+                break; 
+              }
+            }
+          }
+        } else {
+          if(Array.isArray(actualClaimValue)) {
+            if(!actualClaimValue.includes(requiredClaimValue)) {
+              ruleSuccessful = false;
+              break;
+            }
+          } else {
+            if(actualClaimValue !== requiredClaimValue) {
+              ruleSuccessful = false;
+              break;
+            }
+          }
+        }
+      }
+      
+      if(ruleSuccessful) {
+        isAnyAccessGranted = true;
+        break;
+      }
+    }
+
+    return isAnyAccessGranted;
   }
 }

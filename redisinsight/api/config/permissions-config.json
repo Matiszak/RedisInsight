@@ -1,6 +1,6 @@
 {
     "allowAccessToUnrecognizedRedises": true,
     "redisToPermissionMapping": {
-      "ExampleRedisName": "EXAMPLE_ROLE"
+      "ExampleRedisName": [{ "role": "EXAMPLE_ROLE" }]
     }
 }

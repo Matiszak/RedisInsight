@@ -1,10 +1,11 @@
-import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Inject, Injectable, Scope, UnauthorizedException } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
+import ERROR_MESSAGES from 'src/constants/error-messages';
 import * as permissionsConfig from '../../../config/permissions-config.json';
-import { IAuthorizationOracle } from '../auth-users/authorization-oracle.interface'
+import { AuthorizationOracle } from '../auth-users/authorization-oracle'
 
-@Injectable()
-export class JwtAuthorizationService implements IAuthorizationOracle {
+@Injectable({ scope: Scope.REQUEST })
+export class JwtAuthorizationOracle implements AuthorizationOracle {
   constructor(
     @Inject(REQUEST) private request
   ) {}
@@ -13,7 +14,7 @@ export class JwtAuthorizationService implements IAuthorizationOracle {
     let user = this.request.user;
 
     if(!user) {
-        throw new UnauthorizedException('User is not authenticated. JwtAuthorizationService requires authentication to happen before authorization.');
+        throw new UnauthorizedException(ERROR_MESSAGES.USER_NOT_AUTHENTICATED);
     }
 
     let permission = permissionsConfig.redisToPermissionMapping && permissionsConfig.redisToPermissionMapping[redisName];

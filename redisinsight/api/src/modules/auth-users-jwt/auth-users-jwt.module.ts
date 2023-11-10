@@ -1,12 +1,14 @@
 import { DynamicModule, Global, Logger, Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtModule, JwtSecretRequestType } from '@nestjs/jwt';
+import * as crypto from 'crypto';
 import * as jwt from 'jsonwebtoken';
 import config from 'src/utils/config';
-import * as crypto from 'crypto';
-import { AUTHORIZATION_ORACLE } from '../auth-users/authorization-oracle.interface'
+import { Authenticator } from '../auth-users/authenticator'
+import { AuthorizationOracle } from '../auth-users/authorization-oracle'
 import { AuthUsersJwtGuard } from './auth-users-jwt.guard';
-import { JwtAuthorizationService } from './jwt-authorization.service';
+import { JwtAuthorizationOracle } from './jwt-authorization-oracle';
+import { JwtAuthenticator } from './jwt-authenticator';
 
 const AUTHENTICATION_CONFIG = config.get('authentication');
 
@@ -76,15 +78,19 @@ export class AuthUsersJwtModule {
           secretOrKeyProvider: fetchPublicKey
         }),
       ],
-      exports: [ AUTHORIZATION_ORACLE ],
+      exports: [ AuthorizationOracle, Authenticator ],
       providers: [
         {
           provide: APP_GUARD,
           useClass: AuthUsersJwtGuard,
         },
         {
-          provide: AUTHORIZATION_ORACLE,
-          useClass: JwtAuthorizationService,
+          provide: AuthorizationOracle,
+          useClass: JwtAuthorizationOracle,
+        },
+        {
+          provide: Authenticator,
+          useClass: JwtAuthenticator,
         }
       ],
       controllers: [],

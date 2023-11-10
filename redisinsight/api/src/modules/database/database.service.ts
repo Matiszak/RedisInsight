@@ -1,8 +1,7 @@
 import {
-  Inject, Injectable, InternalServerErrorException, Logger, NotFoundException
+  Injectable, InternalServerErrorException, Logger, NotFoundException, Scope
 } from '@nestjs/common';
-import { REQUEST } from '@nestjs/core';
-import { AUTHORIZATION_ORACLE, IAuthorizationOracle } from '../auth-users/authorization-oracle.interface';
+import { AuthorizationOracle } from '../auth-users/authorization-oracle';
 import {
   isEmpty, omit, reject, sum, omitBy, isUndefined,
 } from 'lodash';
@@ -28,7 +27,7 @@ import { deepMerge } from 'src/common/utils';
 import { CaCertificate } from 'src/modules/certificate/models/ca-certificate';
 import { ClientCertificate } from 'src/modules/certificate/models/client-certificate';
 
-@Injectable()
+@Injectable({ scope: Scope.REQUEST })
 export class DatabaseService {
   private logger = new Logger('DatabaseService');
 
@@ -65,7 +64,7 @@ export class DatabaseService {
     private databaseFactory: DatabaseFactory,
     private analytics: DatabaseAnalytics,
     private eventEmitter: EventEmitter2,
-    @Inject(AUTHORIZATION_ORACLE) private authService: IAuthorizationOracle
+    private authService: AuthorizationOracle
   ) {}
 
   static isConnectionAffected(dto: object) {
@@ -82,6 +81,16 @@ export class DatabaseService {
       updatedDatabase.clientCert = dto.clientCert as ClientCertificate;
     }
     return deepMerge(updatedDatabase, dto);
+  }
+
+  /**
+   * Check if user is authorized to access database
+   * @param id
+   */
+  async hasAccess(id: string): Promise<boolean> {
+    this.logger.log(`Checking if database with ${id} is accessible by current user.`);
+    let database = this.get(id);
+    return this.authService.isRedisAccessAuthorized((await database).name);
   }
 
   /**

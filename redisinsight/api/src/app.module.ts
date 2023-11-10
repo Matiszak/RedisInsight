@@ -31,6 +31,7 @@ import { RedisSentinelModule } from './modules/redis-sentinel/redis-sentinel.mod
 import { ProfilerModule } from './modules/profiler/profiler.module';
 import { CliModule } from './modules/cli/cli.module';
 import { StaticsManagementModule } from './modules/statics-management/statics-management.module';
+import { AuthenticationMiddleware } from './middleware/authentication.middleware';
 import { ExcludeRouteMiddleware } from './middleware/exclude-route.middleware';
 import { routes } from './app.routes';
 
@@ -123,6 +124,11 @@ export class AppModule implements OnModuleInit, NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
       .apply(SingleUserAuthMiddleware)
+      .exclude(...SERVER_CONFIG.excludeAuthRoutes)
+      .forRoutes('*');
+
+    consumer
+      .apply(AuthenticationMiddleware)
       .exclude(...SERVER_CONFIG.excludeAuthRoutes)
       .forRoutes('*');
 

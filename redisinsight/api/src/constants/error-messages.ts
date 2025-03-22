@@ -1,6 +1,8 @@
 /* eslint-disable max-len */
 export default {
   INVALID_DATABASE_INSTANCE_ID: 'Invalid database instance id.',
+  USER_NOT_AUTHENTICATED: 'Application user is not authenticated.',
+  NO_ACCESS_TO_DATABASE: 'Access to the database has been denied.',
   COMMAND_EXECUTION_NOT_FOUND: 'Command execution was not found.',
   DATABASE_ANALYSIS_NOT_FOUND: 'Database analysis was not found.',
   DATABASE_RECOMMENDATION_NOT_FOUND: 'Database recommendation was not found.',

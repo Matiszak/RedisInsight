@@ -20,6 +20,10 @@ export default {
     caCertificates: join(homedir, 'ca_certificates'),
     clientCertificates: join(homedir, 'client_certificates'),
   },
+  authentication: {
+    type: process.env.AUTHENTICATION_TYPE || 'none',
+    jwksEndpoint: process.env.AUTHENTICATION_JWT_JWKS_ENDPOINT || undefined
+  },
   server: {
     env: 'production',
   },

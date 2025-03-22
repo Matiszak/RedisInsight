@@ -4,6 +4,7 @@ import {
   Logger,
   NestMiddleware,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { NextFunction, Request, Response } from 'express';
 import ERROR_MESSAGES from 'src/constants/error-messages';
@@ -27,6 +28,11 @@ export class RedisConnectionMiddleware implements NestMiddleware {
     const existDatabaseInstance = await this.databaseService.exists(instanceIdFromReq);
     if (!existDatabaseInstance) {
       throw new NotFoundException(ERROR_MESSAGES.INVALID_DATABASE_INSTANCE_ID);
+    }
+
+    const hasAccess = await this.databaseService.hasAccess(instanceIdFromReq);
+    if (!hasAccess) {
+      throw new UnauthorizedException(ERROR_MESSAGES.NO_ACCESS_TO_DATABASE);
     }
 
     next();

@@ -1,4 +1,9 @@
 export default {
+  authentication: {
+    type: 'jwt',
+    clockTolerance: 9928800,
+    jwksEndpoint: 'http://localhost:8125/jwks.json'
+  },
   server: {
     tls: process.env.SERVER_TLS ? process.env.SERVER_TLS === 'true' : false,
   },

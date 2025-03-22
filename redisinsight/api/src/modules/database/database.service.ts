@@ -1,6 +1,7 @@
 import {
-  Injectable, InternalServerErrorException, Logger, NotFoundException,
+  Injectable, InternalServerErrorException, Logger, NotFoundException, Scope
 } from '@nestjs/common';
+import { AuthorizationOracle } from '../auth-users/authorization-oracle';
 import {
   isEmpty, omit, reject, sum, omitBy, isUndefined,
 } from 'lodash';
@@ -26,7 +27,7 @@ import { deepMerge } from 'src/common/utils';
 import { CaCertificate } from 'src/modules/certificate/models/ca-certificate';
 import { ClientCertificate } from 'src/modules/certificate/models/client-certificate';
 
-@Injectable()
+@Injectable({ scope: Scope.REQUEST })
 export class DatabaseService {
   private logger = new Logger('DatabaseService');
 
@@ -63,6 +64,7 @@ export class DatabaseService {
     private databaseFactory: DatabaseFactory,
     private analytics: DatabaseAnalytics,
     private eventEmitter: EventEmitter2,
+    private authService: AuthorizationOracle
   ) {}
 
   static isConnectionAffected(dto: object) {
@@ -82,6 +84,16 @@ export class DatabaseService {
   }
 
   /**
+   * Check if user is authorized to access database
+   * @param id
+   */
+  async hasAccess(id: string): Promise<boolean> {
+    this.logger.log(`Checking if database with ${id} is accessible by current user.`);
+    let database = this.get(id);
+    return this.authService.isRedisAccessAuthorized((await database).name);
+  }
+
+  /**
    * Simply checks if database exists
    * @param id
    */
@@ -97,7 +109,9 @@ export class DatabaseService {
   async list(): Promise<Database[]> {
     try {
       this.logger.log('Getting databases list');
-      return await this.repository.list();
+      
+      return (await this.repository.list())
+        .filter(database => this.authService.isRedisAccessAuthorized(database.name));
     } catch (e) {
       this.logger.error('Failed to get database instance list.', e);
       throw new InternalServerErrorException();

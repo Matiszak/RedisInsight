@@ -38,6 +38,10 @@ export default {
     caCertificates: join(homedir, 'ca_certificates'),
     clientCertificates: join(homedir, 'client_certificates'),
   },
+  authentication: {
+    type: 'none',
+    clockTolerance: 60
+  },
   server: {
     version,
     env: 'development',

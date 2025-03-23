@@ -1,19 +1,20 @@
 /* eslint-disable sonarjs/no-duplicate-string */
-import { cloneDeep } from 'lodash'
+import { cloneDeep, set } from 'lodash'
 import React from 'react'
 import MockedSocket from 'socket.io-mock'
 import socketIO from 'socket.io-client'
 import { NotificationEvent } from 'uiSrc/constants/notifications'
-import { setNewNotificationReceived, setLastReceivedNotification } from 'uiSrc/slices/app/notifications'
+import { setLastReceivedNotification, setNewNotificationReceived } from 'uiSrc/slices/app/notifications'
 import { setIsConnected } from 'uiSrc/slices/app/socket-connection'
 import { NotificationType } from 'uiSrc/slices/interfaces'
-import { cleanup, mockedStore, render } from 'uiSrc/utils/test-utils'
-import { SocketEvent } from 'uiSrc/constants'
+import { cleanup, initialStateDefault, mockedStore, mockStore, render } from 'uiSrc/utils/test-utils'
+import { FeatureFlags, SocketEvent } from 'uiSrc/constants'
 import { connectedInstanceSelector } from 'uiSrc/slices/instances/instances'
 import { RecommendationsSocketEvents } from 'uiSrc/constants/recommendations'
-import { setTotalUnread } from 'uiSrc/slices/recommendations/recommendations'
-import { NotificationsDto } from 'apiSrc/modules/notification/dto'
+import { addUnreadRecommendations } from 'uiSrc/slices/recommendations/recommendations'
 
+import { GlobalSubscriptions } from 'uiSrc/components'
+import { NotificationsDto } from 'apiSrc/modules/notification/dto'
 import CommonAppSubscription from './CommonAppSubscription'
 
 let store: typeof mockedStore
@@ -51,6 +52,24 @@ describe('CommonAppSubscription', () => {
       setIsConnected(true)
     ]
     expect(store.getActions()).toEqual([...afterRenderActions])
+
+    unmount()
+  })
+
+  it('should not connect socket', () => {
+    const initialStoreState = set(
+      cloneDeep(initialStateDefault),
+      `app.features.featureFlags.features.${FeatureFlags.envDependent}`,
+      { flag: false }
+    )
+
+    const { unmount } = render(<GlobalSubscriptions />, {
+      store: mockStore(initialStoreState)
+    })
+
+    socket.socketClient.emit(SocketEvent.Connect)
+
+    expect(store.getActions()).toEqual([])
 
     unmount()
   })
@@ -94,17 +113,36 @@ describe('CommonAppSubscription', () => {
     })
 
     const { unmount } = render(<CommonAppSubscription />)
-    const mockData = { totalUnread: 10 }
-    const mockData2 = { totalUnread: 20 }
+    const mockData = { totalUnread: 10, recommendations: [{ databaseId: '123' }] }
+    const mockData2 = { totalUnread: 20, recommendations: [{ databaseId: '123' }] }
 
-    socket.socketClient.emit(`${RecommendationsSocketEvents.Recommendation}:123`, mockData)
-    socket.socketClient.emit(`${RecommendationsSocketEvents.Recommendation}:123`, mockData2)
+    socket.socketClient.emit(RecommendationsSocketEvents.Recommendation, mockData)
+    socket.socketClient.emit(RecommendationsSocketEvents.Recommendation, mockData2)
 
     const afterRenderActions = [
-      setTotalUnread(10),
-      setTotalUnread(20),
+      addUnreadRecommendations({ totalUnread: 10, recommendations: [{ databaseId: '123' }] }),
+      addUnreadRecommendations({ totalUnread: 20, recommendations: [{ databaseId: '123' }] }),
     ]
     expect(store.getActions()).toEqual([...afterRenderActions])
+
+    unmount()
+  })
+
+  it('should ignore recommendations from non-connected instances', async () => {
+    (connectedInstanceSelector as jest.Mock).mockReturnValueOnce({
+      id: '456',
+      connectionType: 'STANDALONE',
+      db: 0,
+    })
+
+    const { unmount } = render(<CommonAppSubscription />)
+    const mockData = { totalUnread: 10, recommendations: [{ databaseId: '123' }] }
+    const mockData2 = { totalUnread: 20, recommendations: [{ databaseId: '123' }] }
+
+    socket.socketClient.emit(RecommendationsSocketEvents.Recommendation, mockData)
+    socket.socketClient.emit(RecommendationsSocketEvents.Recommendation, mockData2)
+
+    expect(store.getActions()).toEqual([])
 
     unmount()
   })

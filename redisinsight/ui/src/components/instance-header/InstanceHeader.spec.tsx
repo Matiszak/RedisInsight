@@ -1,15 +1,17 @@
-import { cloneDeep } from 'lodash'
+import { cloneDeep, set } from 'lodash'
 import React from 'react'
 import reactRouterDom from 'react-router-dom'
 import { instance, mock } from 'ts-mockito'
-import { cleanup, mockedStore, render, screen, fireEvent } from 'uiSrc/utils/test-utils'
+import userEvent from '@testing-library/user-event'
+import { cleanup, mockedStore, render, screen, fireEvent, initialStateDefault, mockStore, waitFor } from 'uiSrc/utils/test-utils'
 import {
   checkDatabaseIndex,
   connectedInstanceInfoSelector,
-  connectedInstanceSelector
+  connectedInstanceSelector,
 } from 'uiSrc/slices/instances/instances'
 import { appContextDbIndex } from 'uiSrc/slices/app/context'
 
+import { FeatureFlags } from 'uiSrc/constants'
 import InstanceHeader, { Props } from './InstanceHeader'
 
 const mockedProps = mock<Props>()
@@ -133,5 +135,92 @@ describe('InstanceHeader', () => {
 
     expect(pushMock).toHaveBeenCalledTimes(1)
     expect(pushMock).toHaveBeenCalledWith('/')
+  })
+
+  it('should show env dependent items when feature flag is on', async () => {
+    const initialStoreState = set(
+      cloneDeep(initialStateDefault),
+      `app.features.featureFlags.features.${FeatureFlags.envDependent}`,
+      { flag: true }
+    )
+
+    render(<InstanceHeader {...instance(mockedProps)} />, {
+      store: mockStore(initialStoreState)
+    })
+    expect(screen.queryByTestId('my-redis-db-btn')).toBeInTheDocument()
+    expect(screen.queryByTestId('admin-console-breadcrumb-btn')).not.toBeInTheDocument()
+  })
+
+  it('should not show env dependent items button when feature flag is off', async () => {
+    const initialStoreState = set(
+      cloneDeep(initialStateDefault),
+      `app.features.featureFlags.features.${FeatureFlags.envDependent}`,
+      { flag: false }
+    )
+    set(initialStoreState, 'user.cloudProfile', { data: {} })
+
+    render(<InstanceHeader {...instance(mockedProps)} />, {
+      store: mockStore(initialStoreState)
+    })
+
+    expect(screen.queryByTestId('my-redis-db-btn')).not.toBeInTheDocument()
+  })
+
+  it('should show cloud user profile if env dependant flag is off and cloud profile is present', async () => {
+    const initialStoreState = set(
+      cloneDeep(initialStateDefault),
+      `app.features.featureFlags.features.${FeatureFlags.envDependent}`,
+      { flag: false }
+    )
+    set(initialStoreState, 'user.cloudProfile', { data: {
+      id: 123,
+      name: 'John Smith',
+      currentAccountId: '40',
+      accounts: [{ id: '40', name: 'Test account' }]
+    } })
+
+    render(<InstanceHeader {...instance(mockedProps)} />, {
+      store: mockStore(initialStoreState)
+    })
+
+    userEvent.click(screen.getByTestId('user-profile-btn'))
+    await waitFor(() => {
+      expect(screen.queryByTestId('user-profile-popover-content')).toBeInTheDocument()
+    })
+
+    expect(screen.queryByTestId('user-profile-badge')).toBeInTheDocument()
+    expect(screen.queryByTestId('profile-import-cloud-databases')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('profile-logout')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('cloud-admin-console-link')).toBeInTheDocument()
+    expect(screen.queryByTestId('profile-account-40-selected')).toHaveTextContent('Test account #40')
+  })
+
+  it('should show sso user profile if env dependant flag and cloud-sso features are on', async () => {
+    const initialStoreState = set(
+      cloneDeep(initialStateDefault),
+      `app.features.featureFlags.features.${FeatureFlags.cloudSso}`,
+      { flag: true }
+    )
+    set(initialStoreState, 'oauth.cloud.user', { data: {
+      id: 123,
+      name: 'John Smith',
+      currentAccountId: '40',
+      accounts: [{ id: '40', name: 'Test account' }]
+    } })
+
+    render(<InstanceHeader {...instance(mockedProps)} />, {
+      store: mockStore(initialStoreState)
+    })
+
+    userEvent.click(screen.getByTestId('user-profile-btn'))
+    await waitFor(() => {
+      expect(screen.queryByTestId('user-profile-popover-content')).toBeInTheDocument()
+    })
+
+    expect(screen.queryByTestId('user-profile-badge')).toBeInTheDocument()
+    expect(screen.queryByTestId('profile-import-cloud-databases')).toBeInTheDocument()
+    expect(screen.queryByTestId('profile-logout')).toBeInTheDocument()
+    expect(screen.queryByTestId('cloud-admin-console-link')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('profile-account-40-selected')).toHaveTextContent('Test account #40')
   })
 })

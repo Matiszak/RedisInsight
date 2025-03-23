@@ -1,7 +1,6 @@
 import React, { ChangeEvent, FormEvent, useState, useEffect, useRef } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { toNumber } from 'lodash'
-import cx from 'classnames'
 import {
   EuiButton,
   EuiFieldText,
@@ -16,16 +15,15 @@ import { Maybe, stringToBuffer, validateScoreNumber } from 'uiSrc/utils'
 import { isNaNConvertedString } from 'uiSrc/utils/numbers'
 import { addZsetKey, addKeyStateSelector } from 'uiSrc/slices/browser/keys'
 
-import AddItemsActions from 'uiSrc/pages/browser/components/add-items-actions/AddItemsActions'
-import styles from 'uiSrc/pages/browser/components/key-details-add-items/styles.module.scss'
-import { CreateZSetWithExpireDto } from 'apiSrc/modules/browser/dto/z-set.dto'
-import AddKeyFooter from '../AddKeyFooter/AddKeyFooter'
-import { AddZsetFormConfig as config } from '../constants/fields-config'
-
+import AddMultipleFields from 'uiSrc/pages/browser/components/add-multiple-fields'
+import { ISetMemberState } from 'uiSrc/pages/browser/components/add-key/AddKeySet/interfaces'
 import {
   INITIAL_ZSET_MEMBER_STATE,
   IZsetMemberState
-} from '../../key-details-add-items/add-zset-members/AddZsetMembers'
+} from 'uiSrc/pages/browser/components/add-key/AddKeyZset/interfaces'
+import { CreateZSetWithExpireDto } from 'apiSrc/modules/browser/z-set/dto'
+import AddKeyFooter from '../AddKeyFooter/AddKeyFooter'
+import { AddZsetFormConfig as config } from '../constants/fields-config'
 
 export interface Props {
   keyName: string
@@ -92,6 +90,15 @@ const AddKeyZset = (props: Props) => {
         score: ''
       } : item))
     setMembers(newState)
+  }
+
+  const onClickRemove = ({ id }: ISetMemberState) => {
+    if (members.length === 1) {
+      clearMemberValues(id)
+      return
+    }
+
+    removeMember(id)
   }
 
   const handleMemberChange = (
@@ -169,76 +176,59 @@ const AddKeyZset = (props: Props) => {
 
   return (
     <EuiForm component="form" onSubmit={onFormSubmit}>
-      {
-        members.map((item, index) => (
-          <EuiFlexItem
-            className={cx('flexItemNoFullWidth', 'inlineFieldsNoSpace')}
-            grow
-            key={item.id}
-            style={{ marginBottom: '8px', marginTop: '16px' }}
-          >
-            <EuiFlexGroup gutterSize="m">
-              <EuiFlexItem grow>
-                <EuiFlexGroup gutterSize="none" alignItems="center">
-                  <EuiFlexItem grow>
-                    <EuiFormRow fullWidth>
-                      <EuiFieldText
-                        fullWidth
-                        name={`member-${item.id}`}
-                        id={`member-${item.id}`}
-                        placeholder={config.member.placeholder}
-                        value={item.name}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                          handleMemberChange(
-                            'name',
-                            item.id,
-                            e.target.value
-                          )}
-                        inputRef={index === members.length - 1 ? lastAddedMemberName : null}
-                        disabled={loading}
-                        data-testid="member-name"
-                      />
-                    </EuiFormRow>
-                  </EuiFlexItem>
-                  <EuiFlexItem grow>
-                    <EuiFormRow fullWidth>
-                      <EuiFieldText
-                        fullWidth
-                        name={`score-${item.id}`}
-                        id={`score-${item.id}`}
-                        maxLength={200}
-                        placeholder={config.score.placeholder}
-                        value={item.score}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                          handleMemberChange(
-                            'score',
-                            item.id,
-                            e.target.value
-                          )}
-                        onBlur={() => { handleScoreBlur(item) }}
-                        disabled={loading}
-                        data-testid="member-score"
-                      />
-                    </EuiFormRow>
-                  </EuiFlexItem>
-                </EuiFlexGroup>
-              </EuiFlexItem>
-              <AddItemsActions
-                id={item.id}
-                index={index}
-                length={members.length}
-                addItem={addMember}
-                removeItem={removeMember}
-                clearIsDisabled={isClearDisabled(item)}
-                addItemIsDisabled={(members.some((item) => !item.score.length))}
-                clearItemValues={clearMemberValues}
-                loading={loading}
-                anchorClassName={styles.refreshKeyTooltip}
-              />
-            </EuiFlexGroup>
-          </EuiFlexItem>
-        ))
-      }
+      <AddMultipleFields
+        items={members}
+        isClearDisabled={isClearDisabled}
+        onClickRemove={onClickRemove}
+        onClickAdd={addMember}
+      >
+        {(item, index) => (
+          <EuiFlexGroup gutterSize="none" alignItems="center">
+            <EuiFlexItem grow>
+              <EuiFormRow fullWidth>
+                <EuiFieldText
+                  fullWidth
+                  name={`member-${item.id}`}
+                  id={`member-${item.id}`}
+                  placeholder={config.member.placeholder}
+                  value={item.name}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    handleMemberChange(
+                      'name',
+                      item.id,
+                      e.target.value
+                    )}
+                  inputRef={index === members.length - 1 ? lastAddedMemberName : null}
+                  disabled={loading}
+                  data-testid="member-name"
+                />
+              </EuiFormRow>
+            </EuiFlexItem>
+            <EuiFlexItem grow>
+              <EuiFormRow fullWidth>
+                <EuiFieldText
+                  fullWidth
+                  name={`score-${item.id}`}
+                  id={`score-${item.id}`}
+                  maxLength={200}
+                  placeholder={config.score.placeholder}
+                  value={item.score}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    handleMemberChange(
+                      'score',
+                      item.id,
+                      e.target.value
+                    )}
+                  onBlur={() => { handleScoreBlur(item) }}
+                  disabled={loading}
+                  data-testid="member-score"
+                />
+              </EuiFormRow>
+            </EuiFlexItem>
+          </EuiFlexGroup>
+        )}
+      </AddMultipleFields>
+
       <EuiButton type="submit" fill style={{ display: 'none' }}>
         Submit
       </EuiButton>

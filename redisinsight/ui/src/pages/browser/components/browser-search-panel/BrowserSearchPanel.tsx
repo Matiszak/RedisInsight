@@ -5,23 +5,23 @@ import React, { FC, SVGProps, useCallback, useState } from 'react'
 import cx from 'classnames'
 import { EuiButton, EuiButtonIcon, EuiModal, EuiModalBody, EuiToolTip } from '@elastic/eui'
 import { useDispatch, useSelector } from 'react-redux'
-import { OnboardingTour, ModuleNotLoaded } from 'uiSrc/components'
+import { FeatureFlagComponent, ModuleNotLoaded, OnboardingTour } from 'uiSrc/components'
 import { ONBOARDING_FEATURES } from 'uiSrc/components/onboarding-features'
 import { KeyViewType, SearchMode } from 'uiSrc/slices/interfaces/keys'
 import FilterKeyType from 'uiSrc/pages/browser/components/filter-key-type'
 import RediSearchIndexesList from 'uiSrc/pages/browser/components/redisearch-key-list'
 import SearchKeyList from 'uiSrc/pages/browser/components/search-key-list'
 
-import { ReactComponent as BulkActionsIcon } from 'uiSrc/assets/img/icons/bulk_actions.svg'
-import { ReactComponent as VectorIcon } from 'uiSrc/assets/img/icons/vector.svg'
-import { ReactComponent as RediSearchIcon } from 'uiSrc/assets/img/modules/RedisSearchLight.svg'
+import BulkActionsIcon from 'uiSrc/assets/img/icons/bulk_actions.svg?react'
+import VectorIcon from 'uiSrc/assets/img/icons/vector.svg?react'
+import RediSearchIcon from 'uiSrc/assets/img/modules/RedisSearchLight.svg?react'
 
 import { changeSearchMode, keysSelector } from 'uiSrc/slices/browser/keys'
 import { isRedisearchAvailable } from 'uiSrc/utils'
 import { getBasedOnViewTypeEvent, sendEventTelemetry, TelemetryEvent } from 'uiSrc/telemetry'
 import { resetBrowserTree } from 'uiSrc/slices/app/context'
 import { localStorageService } from 'uiSrc/services'
-import { BrowserStorageItem, BulkActionsType } from 'uiSrc/constants'
+import { BrowserStorageItem, BulkActionsType, FeatureFlags } from 'uiSrc/constants'
 import { connectedInstanceSelector } from 'uiSrc/slices/instances/instances'
 import { setBulkActionType } from 'uiSrc/slices/browser/bulkActions'
 
@@ -168,7 +168,7 @@ const BrowserSearchPanel = (props: Props) => {
       className={styles.addKey}
       data-testid="btn-add-key"
     >
-      + Key
+      + <span className={styles.addKeyText}>Key</span>
     </EuiButton>
   )
 
@@ -182,7 +182,7 @@ const BrowserSearchPanel = (props: Props) => {
       data-testid="btn-bulk-actions"
       aria-label="bulk actions"
     >
-      Bulk Actions
+      <span className={styles.bulkActionsText}>Bulk Actions</span>
     </EuiButton>
   )
 
@@ -224,14 +224,16 @@ const BrowserSearchPanel = (props: Props) => {
           {SearchModeSwitch()}
         </OnboardingTour>
         {searchMode === SearchMode.Pattern ? (
-          <FilterKeyType />
+          <FilterKeyType modules={modules} />
         ) : (
           <RediSearchIndexesList onCreateIndex={handleCreateIndexPanel} />
         )}
         <SearchKeyList />
       </div>
       <div style={{ flexShrink: 0 }}>
-        {BulkActionsBtn}
+        <FeatureFlagComponent name={FeatureFlags.envDependent}>
+          {BulkActionsBtn}
+        </FeatureFlagComponent>
         {AddKeyBtn}
       </div>
     </div>

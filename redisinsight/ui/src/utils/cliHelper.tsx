@@ -10,11 +10,11 @@ import { BrowserStorageItem, ICommands, CommandGroup } from 'uiSrc/constants'
 import { ModuleCommandPrefix } from 'uiSrc/pages/workbench/constants'
 import { SelectCommand } from 'uiSrc/constants/cliOutput'
 import {
-  ClusterNode,
   RedisDefaultModules,
   COMMAND_MODULES,
 } from 'uiSrc/slices/interfaces'
 
+import { getCommandsForExecution } from 'uiSrc/utils/monaco/monacoUtils'
 import { AdditionalRedisModule } from 'apiSrc/modules/database/models/additional.redis.module'
 import formatToText from './transformers/cliTextFormatter'
 import { getDbIndex } from './longNames'
@@ -28,20 +28,6 @@ interface IGroupModeCommand {
   command: string
   response: string
   status: CommandExecutionStatus
-}
-
-const cliParseTextResponseWithRedirect = (
-  text: string = '',
-  command: string = '',
-  status: CommandExecutionStatus = CommandExecutionStatus.Success,
-  redirectTo: ClusterNode | undefined,
-) => {
-  let redirectMessage = ''
-  if (redirectTo) {
-    const { host, port, slot } = redirectTo
-    redirectMessage = `-> Redirected to slot [${slot}] located at ${host}:${port}`
-  }
-  return [redirectMessage, '\n', cliParseTextResponse(text, command, status), '\n']
 }
 
 const cliParseTextResponseWithOffset = (
@@ -169,13 +155,21 @@ const checkCommandModule = (command: string) => {
     case command.startsWith(ModuleCommandPrefix.TOPK): {
       return RedisDefaultModules.Bloom
     }
-    case command.startsWith(ModuleCommandPrefix.TriggersAndFunctions): {
-      return RedisDefaultModules.RedisGears
-    }
     default: {
       return null
     }
   }
+}
+
+const getUnsupportedModulesFromQuery = (loadedModules: AdditionalRedisModule[], query: string = ''): Set<RedisDefaultModules> => {
+  const result = new Set<RedisDefaultModules>()
+  getCommandsForExecution(query).forEach((command) => {
+    const module = checkUnsupportedModuleCommand(loadedModules, command)
+    if (module) {
+      result.add(module)
+    }
+  })
+  return result
 }
 
 const checkUnsupportedModuleCommand = (loadedModules: AdditionalRedisModule[], commandLine: string) => {
@@ -241,7 +235,6 @@ const removeDeprecatedModuleCommands = (commands: string[]) => commands
 export {
   cliParseTextResponse,
   cliParseTextResponseWithOffset,
-  cliParseTextResponseWithRedirect,
   cliParseCommandsGroupResult,
   cliCommandOutput,
   bashTextValue,
@@ -259,4 +252,5 @@ export {
   removeDeprecatedModuleCommands,
   checkDeprecatedModuleCommand,
   checkDeprecatedCommandGroup,
+  getUnsupportedModulesFromQuery,
 }

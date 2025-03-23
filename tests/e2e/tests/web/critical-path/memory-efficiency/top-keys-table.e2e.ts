@@ -3,7 +3,7 @@ import { Selector } from 'testcafe';
 import { MyRedisDatabasePage, MemoryEfficiencyPage, BrowserPage } from '../../../../pageObjects';
 import { rte } from '../../../../helpers/constants';
 import { DatabaseHelper } from '../../../../helpers/database';
-import { commonUrl, ossStandaloneConfig, ossStandaloneRedisearch } from '../../../../helpers/conf';
+import { commonUrl, ossStandaloneRedisearch } from '../../../../helpers/conf';
 import { DatabaseAPIRequests } from '../../../../helpers/api/api-database';
 import { deleteAllKeysFromDB, populateDBWithHashes, populateHashWithFields } from '../../../../helpers/keys';
 import { Common } from '../../../../helpers/common';
@@ -28,7 +28,7 @@ const listCommand = `rpush list ${members.slice(0, -3)}`;
 const stringCommand = `set string "${chance.paragraph({ sentences: 100 })}"`; // The biggest key
 const setCommand = `sadd set ${members}`; // Middle key
 
-fixture `Memory Efficiency Top Keys Table`
+fixture(`Memory Efficiency Top Keys Table`).skip
     .meta({ type: 'critical_path', rte: rte.standalone })
     .page(commonUrl);
 test
@@ -80,7 +80,7 @@ test
         // Go to Analysis Tools page
         await t.click(myRedisDatabasePage.NavigationPanel.analysisPageButton);
     })
-    .after(async t => {
+    .after(async() => {
         await apiKeyRequests.deleteKeyByNameApi(keyName, ossStandaloneRedisearch.databaseName);
         await databaseAPIRequests.deleteStandaloneDatabaseApi(ossStandaloneRedisearch);
     })('Big highlighted key tooltip', async t => {

@@ -8,8 +8,8 @@ import {
   generateInvalidDataTestCases,
   validateInvalidDataTestCase,
   validateApiCall,
-  requirements,
-} from '../deps';
+  requirements, getMainCheckFn,
+} from '../deps'
 const { server, request, constants, rte, localDb } = deps;
 
 // endpoint to test
@@ -19,31 +19,16 @@ const endpoint = (instanceId = constants.TEST_INSTANCE_ID) =>
 // input data schema
 const dataSchema = Joi.object({
   command: Joi.string().required(),
-  role: Joi.string().valid('ALL', 'MASTER', 'SLAVE').allow(null),
   mode: Joi.string().valid('RAW', 'ASCII').allow(null),
   resultsMode: Joi.string().valid('DEFAULT', 'GROUP_MODE', 'SILENT').allow(null),
-  nodeOptions: Joi.object().keys({
-    host: Joi.string().required(),
-    // todo: fix BE transform to avoid handle boolean as number
-    port: Joi.number().required().allow(true),
-    enableRedirection: Joi.boolean().required().messages({
-      'any.required': '{#label} should not be null or undefined',
-    }),
-  }).allow(null),
 }).messages({
   'any.required': '{#label} should not be empty',
 }).strict();
 
 const validInputData = {
   command: 'set foo bar',
-  role: 'ALL',
   mode: 'ASCII',
   resultsMode: 'DEFAULT',
-  nodeOptions: {
-    host: 'localhost',
-    port: 6379,
-    enableRedirection: true,
-  }
 };
 
 const responseSchema = Joi.object().keys({
@@ -52,40 +37,13 @@ const responseSchema = Joi.object().keys({
   result: Joi.array().items(Joi.object({
     response: Joi.any().required(),
     status: Joi.string().required(),
-    node: Joi.object({
-      host: Joi.string().required(),
-      port: Joi.number().required(),
-      slot: Joi.number(),
-    }),
   })),
-  role: Joi.string().allow(null),
   mode: Joi.string().required(),
   resultsMode: Joi.string().required(),
-  nodeOptions: Joi.object().keys({
-    host: Joi.string().required(),
-    port: Joi.number().required(),
-    enableRedirection: Joi.boolean().required(),
-  }).allow(null),
+  type: Joi.string().valid('WORKBENCH', 'SEARCH').required(),
 }).required();
 
-const mainCheckFn = async (testCase) => {
-  it(testCase.name, async () => {
-    // additional checks before test run
-    if (testCase.before) {
-      await testCase.before();
-    }
-
-    await validateApiCall({
-      endpoint,
-      ...testCase,
-    });
-
-    // additional checks after test pass
-    if (testCase.after) {
-      await testCase.after();
-    }
-  });
-};
+const mainCheckFn = getMainCheckFn(endpoint);
 
 describe('POST /databases/:instanceId/plugins/command-executions', () => {
   before(rte.data.truncate);
@@ -221,7 +179,7 @@ describe('POST /databases/:instanceId/plugins/command-executions', () => {
         checkFn: async ({ body }) => {
           expect(body.result.length).to.eql(1);
           expect(body.result[0].status).to.eql('fail');
-          expect(body.result[0].response).to.include('command is not allowed by the RedisInsight Plugins');
+          expect(body.result[0].response).to.include('command is not allowed by the Redis Insight Plugins');
         },
         ...testCase,
       }));
@@ -246,6 +204,7 @@ describe('POST /databases/:instanceId/plugins/command-executions', () => {
             checkFn: async ({ body }) => {
               expect(body.result.length).to.eql(1);
 
+              // @ts-expect-error
               const count = await repo.count({ databaseId: constants.TEST_INSTANCE_ID });
               expect(count).to.lte(30);
 
@@ -257,7 +216,8 @@ describe('POST /databases/:instanceId/plugins/command-executions', () => {
       });
     });
   });
-  describe('Standalone + Sentinel', () => {
+  // Skip 'Standalone + Sentinel' and 'Cluster' tests because tested functionalities were removed
+  xdescribe('Standalone + Sentinel', () => {
     requirements('!rte.type=CLUSTER');
 
     describe('Incorrect requests for redis client type', () => {
@@ -299,7 +259,7 @@ describe('POST /databases/:instanceId/plugins/command-executions', () => {
       ].map(mainCheckFn);
     });
   });
-  describe('Cluster', () => {
+  xdescribe('Cluster', () => {
     requirements('rte.type=CLUSTER');
     requirements('!rte.re');
 

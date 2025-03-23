@@ -1,9 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { TelemetryEvents } from 'src/constants';
+import { some } from 'lodash';
+import { DEFAULT_MATCH, TelemetryEvents } from 'src/constants';
 import { TelemetryBaseService } from 'src/modules/analytics/telemetry.base.service';
 import { CommandExecutionStatus } from 'src/modules/cli/dto/cli.dto';
 import { RedisError, ReplyError } from 'src/models';
+import { SessionMetadata } from 'src/common/models';
+import { SubscriptionDto } from './dto';
 
 export interface IExecResult {
   response: any;
@@ -17,9 +20,10 @@ export class PubSubAnalyticsService extends TelemetryBaseService {
     super(eventEmitter);
   }
 
-  sendMessagePublishedEvent(databaseId: string, affected: number): void {
+  sendMessagePublishedEvent(sessionMetadata: SessionMetadata, databaseId: string, affected: number): void {
     try {
       this.sendEvent(
+        sessionMetadata,
         TelemetryEvents.PubSubMessagePublished,
         {
           databaseId,
@@ -31,12 +35,14 @@ export class PubSubAnalyticsService extends TelemetryBaseService {
     }
   }
 
-  sendChannelSubscribeEvent(databaseId: string): void {
+  sendChannelSubscribeEvent(sessionMetadata: SessionMetadata, databaseId: string, subs: SubscriptionDto[]): void {
     try {
       this.sendEvent(
+        sessionMetadata,
         TelemetryEvents.PubSubChannelSubscribed,
         {
           databaseId,
+          allChannels: some(subs, { channel: DEFAULT_MATCH }) ? 'yes' : 'no',
         },
       );
     } catch (e) {
@@ -44,9 +50,10 @@ export class PubSubAnalyticsService extends TelemetryBaseService {
     }
   }
 
-  sendChannelUnsubscribeEvent(databaseId: string): void {
+  sendChannelUnsubscribeEvent(sessionMetadata: SessionMetadata, databaseId: string): void {
     try {
       this.sendEvent(
+        sessionMetadata,
         TelemetryEvents.PubSubChannelUnsubscribed,
         {
           databaseId,

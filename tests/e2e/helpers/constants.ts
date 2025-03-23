@@ -7,7 +7,7 @@ export enum KeyTypesTexts {
     ReJSON = 'JSON',
     Stream = 'Stream',
     Graph = 'Graph',
-    TimeSeries = 'TS',
+    TimeSeries = 'Time Series',
 }
 export const keyLength = 50;
 
@@ -46,6 +46,7 @@ export enum RecommendationIds {
     useSmallerKeys = 'useSmallerKeys',
     avoidLogicalDatabases = 'avoidLogicalDatabases',
     searchJson = 'searchJSON',
+    rdi = 'tryRDI'
 }
 
 export enum LibrariesSections {
@@ -74,4 +75,59 @@ export enum ResourcePath {
     RedisSentinel = '/redis-sentinel',
     ClusterDetails = '/cluster-details',
     SyncFeatures = '/features/sync',
+    Rdi = '/rdi'
 }
+
+export enum ExploreTabs {
+    Tutorials  = 'Tutorials',
+    Tips = 'Tips',
+}
+
+export enum Compatibility {
+    SearchAndQuery  = 'search',
+    Json = 'json',
+    TimeSeries = 'time-series'
+}
+
+export enum ChatBotTabs {
+    General  = 'General',
+    Database = 'Database',
+}
+
+export enum RedisOverviewPage {
+    DataBase  = 'Redis Databases',
+    Rdi = 'My RDI instances',
+}
+
+export enum TextConnectionSection {
+    Success  = 'success',
+    Failed = 'failed',
+}
+
+export enum RdiTemplatePipelineType {
+    Ingest  = 'ingest',
+    WriteBehind = 'write-behind',
+}
+
+export enum RdiTemplateDatabaseType  {
+    SqlServer  = 'sql',
+    Oracle = 'oracle',
+    MySql = 'mysql',
+}
+
+export enum RdiPopoverOptions  {
+    Server  = 'server',
+    File = 'file',
+    Pipeline = 'empty',
+}
+
+export enum TlsCertificates  {
+    CA  = 'ca',
+    Client = 'client',
+}
+
+export enum AddElementInList  {
+    Head ,
+    Tail,
+}
+

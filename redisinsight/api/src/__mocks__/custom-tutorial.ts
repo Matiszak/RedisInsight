@@ -11,7 +11,8 @@ export const mockCustomTutorialId2 = 'a77b23c1-7816-4ea4-b61f-d37795a0f805-ct-id
 
 export const mockCustomTutorialTmpPath = '/tmp/path';
 
-export const mockCustomTutorialsHttpLink = 'https://somesime.com/archive.zip';
+export const mockCustomTutorialsHttpLink = 'https://github.com/archive.zip';
+export const mockCustomTutorialsHttpLink2 = 'https://raw.githubusercontent.com/archive.zip';
 
 export const mockCustomTutorial = Object.assign(new CustomTutorial(), {
   id: mockCustomTutorialId,
@@ -74,6 +75,7 @@ export const mockCustomTutorialManifestJson = {
               type: CustomTutorialManifestType.InternalLink,
               id: 'introduction',
               label: 'introduction',
+              summary: 'Introduction summary',
               args: {
                 path: '/ct-folder-1/ct-sub-folder-1/introduction.md',
               },
@@ -137,11 +139,11 @@ export const mockCustomTutorialManifest2 = {
 export const globalCustomTutorialManifest = {
   type: CustomTutorialManifestType.Group,
   id: 'custom-tutorials',
-  label: 'MY TUTORIALS',
+  label: 'My tutorials',
   _actions: [CustomTutorialActions.CREATE],
   args: {
     withBorder: true,
-    initialIsOpen: true,
+    initialIsOpen: false,
   },
   children: [
     mockCustomTutorialManifest,

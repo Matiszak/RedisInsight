@@ -2,13 +2,13 @@ import { v4 as uuidv4 } from 'uuid';
 import config from 'src/utils/config';
 import { CloudJobInfo, CloudJobStatus, CloudJobStep } from 'src/modules/cloud/job/models/cloud-job-info';
 import { HttpException, Logger } from '@nestjs/common';
-import { ClassType } from 'class-transformer/ClassTransformer';
 import { CloudJobAbortedException, wrapCloudJobError } from 'src/modules/cloud/job/exceptions';
 import { SessionMetadata } from 'src/common/models';
 import { CloudJobName } from 'src/modules/cloud/job/constants';
 import { CloudRequestUtm } from 'src/modules/cloud/common/models';
 import { debounce } from 'lodash';
 import { CloudCapiAuthDto } from 'src/modules/cloud/common/dto';
+import { ClassType } from 'class-transformer/ClassTransformer';
 
 const cloudConfig = config.get('cloud');
 
@@ -24,6 +24,8 @@ export class CloudJobOptions {
   stateCallbacks?: ((self: CloudJob) => any)[] = [];
 
   name?: CloudJobName;
+
+  child?: boolean;
 }
 
 export abstract class CloudJob {
@@ -57,19 +59,23 @@ export abstract class CloudJob {
     }
 
     this.debounce = debounce(() => {
-      try {
-        (this.options?.stateCallbacks || []).forEach((cb) => {
-          cb?.(this)?.catch?.(() => {});
-        });
-      } catch (e) {
-        // silently ignore callback
-      }
+      this.triggerChangeStateCallbacks();
     }, 1_000, {
       maxWait: 2_000,
     });
   }
 
-  public async run() {
+  private triggerChangeStateCallbacks() {
+    try {
+      (this.options?.stateCallbacks || []).forEach((cb) => {
+        cb?.(this)?.catch?.(() => {});
+      });
+    } catch (e) {
+      // silently ignore callback
+    }
+  }
+
+  public async run(sessionMetadata: SessionMetadata): Promise<void> {
     try {
       this.changeState({
         status: CloudJobStatus.Running,
@@ -86,7 +92,7 @@ export abstract class CloudJob {
         );
       }
 
-      return await this.iteration();
+      return await this.iteration(sessionMetadata);
     } catch (e) {
       this.logger.error('Cloud job failed', e);
 
@@ -127,20 +133,26 @@ export abstract class CloudJob {
     return new TargetJob(
       {
         ...this.options,
-        stateCallbacks: [() => this.changeState()],
         ...options,
+        stateCallbacks: [() => this.changeState()],
+        child: true,
       },
       data,
       this.dependencies,
     );
   }
 
-  public async runChildJob(TargetJob: ClassType<CloudJob>, data: {}, options: CloudJobOptions): Promise<any> {
+  public async runChildJob(
+    sessionMetadata: SessionMetadata,
+    TargetJob: ClassType<CloudJob>,
+    data: {},
+    options: CloudJobOptions,
+  ): Promise<any> {
     const child = this.createChildJob(TargetJob, data, options);
 
     this.changeState({ child });
 
-    const result = await child.run();
+    const result = await child.run(sessionMetadata);
 
     this.changeState({ child: null });
 
@@ -154,7 +166,11 @@ export abstract class CloudJob {
   protected changeState(state = {}) {
     Object.entries(state).forEach(([key, value]) => { this[key] = value; });
 
-    this.debounce();
+    if (this.options.child) {
+      this.triggerChangeStateCallbacks();
+    } else {
+      this.debounce();
+    }
   }
 
   protected checkSignal() {
@@ -166,13 +182,16 @@ export abstract class CloudJob {
     }
   }
 
-  protected runNextIteration(timeout = cloudConfig.jobIterationInterval): Promise<any> {
+  protected runNextIteration(
+    sessionMetadata: SessionMetadata,
+    timeout = cloudConfig.jobIterationInterval,
+  ): Promise<any> {
     return new Promise((res, rej) => {
       setTimeout(() => {
-        this.iteration().then(res).catch(rej);
+        this.iteration(sessionMetadata).then(res).catch(rej);
       }, timeout);
     });
   }
 
-  protected abstract iteration(): Promise<any>;
+  protected abstract iteration(sessionMetadata: SessionMetadata): Promise<any>;
 }

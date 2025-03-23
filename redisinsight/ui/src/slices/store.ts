@@ -1,6 +1,7 @@
 import { createBrowserHistory } from 'history'
 import { configureStore, combineReducers } from '@reduxjs/toolkit'
 
+import { getConfig } from 'uiSrc/config'
 import instancesReducer from './instances/instances'
 import caCertsReducer from './instances/caCerts'
 import clientCertsReducer from './instances/clientCerts'
@@ -21,19 +22,22 @@ import cliSettingsReducer from './cli/cli-settings'
 import outputReducer from './cli/cli-output'
 import monitorReducer from './cli/monitor'
 import userSettingsReducer from './user/user-settings'
+import cloudUserProfile from './user/cloud-user-profile'
 import appInfoReducer from './app/info'
+import appInitReducer from './app/init'
+import appConnectivityReducer from './app/connectivity'
 import appContextReducer from './app/context'
+import appCsrfReducer from './app/csrf'
 import appRedisCommandsReducer from './app/redis-commands'
 import appPluginsReducer from './app/plugins'
 import appsSocketConnectionReducer from './app/socket-connection'
 import appFeaturesReducer from './app/features'
-import appActionBarReducer from './app/actionBar'
 import appUrlHandlingReducer from './app/url-handling'
 import appOauthReducer from './oauth/cloud'
 import workbenchResultsReducer from './workbench/wb-results'
-import workbenchGuidesReducer from './workbench/wb-guides'
 import workbenchTutorialsReducer from './workbench/wb-tutorials'
 import workbenchCustomTutorialsReducer from './workbench/wb-custom-tutorials'
+import searchAndQueryReducer from './search/searchAndQuery'
 import contentCreateRedisButtonReducer from './content/create-redis-buttons'
 import contentGuideLinksReducer from './content/guide-links'
 import pubSubReducer from './pubsub/pubsub'
@@ -43,7 +47,16 @@ import clusterDetailsReducer from './analytics/clusterDetails'
 import databaseAnalysisReducer from './analytics/dbAnalysis'
 import redisearchReducer from './browser/redisearch'
 import recommendationsReducer from './recommendations/recommendations'
-import triggeredFunctionsReducer from './triggeredFunctions/triggeredFunctions'
+import sidePanelsReducer from './panels/sidePanels'
+import rdiInstancesReducer from './rdi/instances'
+import rdiPipelineReducer from './rdi/pipeline'
+import rdiDryRunJobReducer from './rdi/dryRun'
+import rdiTestConnectionsReducer from './rdi/testConnections'
+import rdiStatisticsReducer from './rdi/statistics'
+import aiAssistantReducer from './panels/aiAssistant'
+import appDbSettingsReducer from './app/db-settings'
+
+const riConfig = getConfig()
 
 export const history = createBrowserHistory()
 
@@ -56,8 +69,11 @@ export const rootReducer = combineReducers({
     plugins: appPluginsReducer,
     socketConnection: appsSocketConnectionReducer,
     features: appFeaturesReducer,
-    actionBar: appActionBarReducer,
     urlHandling: appUrlHandlingReducer,
+    csrf: appCsrfReducer,
+    init: appInitReducer,
+    connectivity: appConnectivityReducer,
+    dbSettings: appDbSettingsReducer,
   }),
   connections: combineReducers({
     instances: instancesReducer,
@@ -86,12 +102,15 @@ export const rootReducer = combineReducers({
   }),
   user: combineReducers({
     settings: userSettingsReducer,
+    cloudProfile: cloudUserProfile,
   }),
   workbench: combineReducers({
     results: workbenchResultsReducer,
-    guides: workbenchGuidesReducer,
     tutorials: workbenchTutorialsReducer,
     customTutorials: workbenchCustomTutorialsReducer,
+  }),
+  search: combineReducers({
+    query: searchAndQueryReducer,
   }),
   content: combineReducers({
     createRedisButtons: contentCreateRedisButtonReducer,
@@ -105,16 +124,26 @@ export const rootReducer = combineReducers({
   }),
   pubsub: pubSubReducer,
   recommendations: recommendationsReducer,
-  triggeredFunctions: triggeredFunctionsReducer,
   oauth: combineReducers({
     cloud: appOauthReducer,
   }),
+  panels: combineReducers({
+    sidePanels: sidePanelsReducer,
+    aiAssistant: aiAssistantReducer,
+  }),
+  rdi: combineReducers({
+    instances: rdiInstancesReducer,
+    pipeline: rdiPipelineReducer,
+    dryRun: rdiDryRunJobReducer,
+    testConnections: rdiTestConnectionsReducer,
+    statistics: rdiStatisticsReducer,
+  })
 })
 
 const store = configureStore({
   reducer: rootReducer,
   middleware: (getDefaultMiddleware) => getDefaultMiddleware({ serializableCheck: false, }),
-  devTools: process.env.NODE_ENV !== 'production',
+  devTools: riConfig.app.env !== 'production',
 })
 
 export { store }

@@ -3,23 +3,30 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
-import config from 'src/utils/config';
+import config, { Config } from 'src/utils/config';
 import { OnEvent } from '@nestjs/event-emitter';
 import { RecommendationServerEvents } from 'src/modules/database-recommendation/constants';
 import {
   DatabaseRecommendationsResponse,
 } from 'src/modules/database-recommendation/dto/database-recommendations.response';
+import { SessionMetadata } from 'src/common/models';
+import { getUserRoom } from 'src/constants/websocket-rooms';
 
-const SOCKETS_CONFIG = config.get('sockets');
+const SOCKETS_CONFIG = config.get('sockets') as Config['sockets'];
 
-@WebSocketGateway({ cors: SOCKETS_CONFIG.cors, serveClient: SOCKETS_CONFIG.serveClient })
+@WebSocketGateway({
+  path: SOCKETS_CONFIG.path,
+  cors: SOCKETS_CONFIG.cors.enabled
+    ? { origin: SOCKETS_CONFIG.cors.origin, credentials: SOCKETS_CONFIG.cors.credentials } : false,
+  serveClient: SOCKETS_CONFIG.serveClient,
+})
 export class DatabaseRecommendationGateway {
   @WebSocketServer() wss: Server;
 
   @OnEvent(RecommendationServerEvents.Recommendation)
-  notify(databaseId: string, data: DatabaseRecommendationsResponse) {
-    this.wss.of('/').emit(
-      `${RecommendationServerEvents.Recommendation}:${databaseId}`,
+  notify({ userId }: SessionMetadata, data: DatabaseRecommendationsResponse) {
+    this.wss.to(getUserRoom(userId)).emit(
+      RecommendationServerEvents.Recommendation,
       data,
     );
   }

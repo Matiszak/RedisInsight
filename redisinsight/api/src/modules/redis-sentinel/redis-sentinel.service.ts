@@ -1,30 +1,30 @@
 import {
   HttpException, Injectable, Logger,
 } from '@nestjs/common';
+import { v4 as uuidv4 } from 'uuid';
 import { CreateSentinelDatabaseResponse } from 'src/modules/redis-sentinel/dto/create.sentinel.database.response';
 import { CreateSentinelDatabasesDto } from 'src/modules/redis-sentinel/dto/create.sentinel.databases.dto';
-import { RedisService } from 'src/modules/redis/redis.service';
 import { Database } from 'src/modules/database/models/database';
 import { ActionStatus, ClientContext, SessionMetadata } from 'src/common/models';
 import { DatabaseService } from 'src/modules/database/database.service';
 import { getRedisConnectionException } from 'src/utils';
 import { SentinelMaster } from 'src/modules/redis-sentinel/models/sentinel-master';
 import { RedisSentinelAnalytics } from 'src/modules/redis-sentinel/redis-sentinel.analytics';
-import { DatabaseInfoProvider } from 'src/modules/database/providers/database-info.provider';
 import { DatabaseFactory } from 'src/modules/database/providers/database.factory';
-import { RedisConnectionFactory } from 'src/modules/redis/redis-connection.factory';
+import { discoverSentinelMasterGroups } from 'src/modules/redis/utils';
+import { RedisClientFactory } from 'src/modules/redis/redis.client.factory';
+import { ConstantsProvider } from 'src/modules/constants/providers/constants.provider';
 
 @Injectable()
 export class RedisSentinelService {
   private logger = new Logger('RedisSentinelService');
 
   constructor(
-    private readonly redisService: RedisService,
-    private readonly redisConnectionFactory: RedisConnectionFactory,
+    private readonly redisClientFactory: RedisClientFactory,
     private readonly databaseService: DatabaseService,
     private readonly databaseFactory: DatabaseFactory,
-    private readonly databaseInfoProvider: DatabaseInfoProvider,
     private readonly redisSentinelAnalytics: RedisSentinelAnalytics,
+    private readonly constantsProvider: ConstantsProvider,
   ) {}
 
   /**
@@ -32,12 +32,14 @@ export class RedisSentinelService {
    * Will not fail on connection or any other errors during adding each database
    * Returns statuses instead
    * todo: Handle unique certificate issue
+   * @param sessionMetadata
    * @param dto
    */
   public async createSentinelDatabases(
+    sessionMetadata: SessionMetadata,
     dto: CreateSentinelDatabasesDto,
   ): Promise<CreateSentinelDatabaseResponse[]> {
-    this.logger.log('Adding Sentinel masters.');
+    this.logger.debug('Adding Sentinel masters.', sessionMetadata);
     const result: CreateSentinelDatabaseResponse[] = [];
     const { masters, ...connectionOptions } = dto;
     try {
@@ -71,6 +73,7 @@ export class RedisSentinelService {
         } = master;
         try {
           const model = await this.databaseService.create(
+            sessionMetadata,
             {
               ...connectionOptions,
               name: alias,
@@ -81,6 +84,8 @@ export class RedisSentinelService {
                 password,
               },
             } as Database,
+            undefined,
+            { enableReadyCheck: false },
           );
 
           result.push({
@@ -101,34 +106,36 @@ export class RedisSentinelService {
 
       return result;
     } catch (error) {
-      this.logger.error('Failed to add Sentinel masters.', error);
+      this.logger.error('Failed to add Sentinel masters.', error, sessionMetadata);
       throw getRedisConnectionException(error, connectionOptions);
     }
   }
 
   /**
    * Check connection and get sentinel masters
+   * @param sessionMetadata
    * @param dto
    */
   public async getSentinelMasters(
+    sessionMetadata: SessionMetadata,
     dto: Database,
   ): Promise<SentinelMaster[]> {
-    this.logger.log('Connection and getting sentinel masters.');
+    this.logger.debug('Connection and getting sentinel masters.', sessionMetadata);
     let result: SentinelMaster[];
     try {
       const database = await this.databaseFactory.createStandaloneDatabaseModel(dto);
-      const client = await this.redisConnectionFactory.createStandaloneConnection({
-        sessionMetadata: {} as SessionMetadata,
-        databaseId: database.id,
+      const client = await this.redisClientFactory.getConnectionStrategy().createStandaloneClient({
+        sessionMetadata: this.constantsProvider.getSystemSessionMetadata(),
+        databaseId: database.id || uuidv4(),
         context: ClientContext.Common,
-      }, database, { useRetry: false });
-      result = await this.databaseInfoProvider.determineSentinelMasterGroups(client);
-      this.redisSentinelAnalytics.sendGetSentinelMastersSucceedEvent(result);
+      }, database, { useRetry: false, enableReadyCheck: false });
+      result = await discoverSentinelMasterGroups(client);
+      this.redisSentinelAnalytics.sendGetSentinelMastersSucceedEvent(sessionMetadata, result);
 
       await client.disconnect();
     } catch (error) {
       const exception: HttpException = getRedisConnectionException(error, dto);
-      this.redisSentinelAnalytics.sendGetSentinelMastersFailedEvent(exception);
+      this.redisSentinelAnalytics.sendGetSentinelMastersFailedEvent(sessionMetadata, exception);
       throw exception;
     }
     return result;

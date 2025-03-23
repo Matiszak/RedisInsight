@@ -30,26 +30,25 @@ fixture `Save commands`
         await databaseAPIRequests.deleteStandaloneDatabaseApi(ossStandaloneConfig);
     });
 test('Verify that user can see a tooltip and toggle that allows to save Profiler log or not in the Profiler', async t => {
-    // const toolTip = [
-    //     'Allows you to download the generated log file after pausing the Profiler',
-    //     'Profiler log is saved to a file on your local machine with no size limitation. The temporary log file will be automatically rewritten when the Profiler is reset.'
-    // ];
+    const toolTip = [
+        'Allows you to download the generated log file after pausing the Profiler',
+        'Profiler log is saved to a file on your local machine with no size limitation. The temporary log file will be automatically rewritten when the Profiler is reset.'
+    ];
 
     await t.click(browserPage.Profiler.expandMonitor);
     // Check the toggle and Tooltip for Save log
     await t.expect(browserPage.Profiler.saveLogSwitchButton.exists).ok('The toggle that allows to save Profiler log is not displayed');
-    // update after resolving testcafe Native Automation mode limitations
-    // await t.hover(browserPage.Profiler.saveLogSwitchButton);
-    // for (const message of toolTip) {
-    //     await t.click(browserPage.Profiler.saveLogSwitchButton);
-    //     await t.expect(browserPage.Profiler.saveLogToolTip.textContent).contains(message, 'The toolTip for save log in Profiler is not displayed');
-    // }
+    await t.hover(browserPage.Profiler.saveLogSwitchButton);
+    for (const message of toolTip) {
+        await t.click(browserPage.Profiler.saveLogSwitchButton);
+        await t.expect(browserPage.Profiler.saveLogToolTip.innerText).contains(message, 'The toolTip for save log in Profiler is not displayed');
+    }
     // Check toggle state
     await t.expect(browserPage.Profiler.saveLogSwitchButton.getAttribute('aria-checked')).eql('false', 'The toggle state is not OFF when Profiler opened');
 });
 test('Verify that user can see that toggle is not displayed when Profiler is started', async t => {
     // Start Monitor without save logs
-    await browserPage.Profiler.startMonitor();
+    await browserPage.Profiler.startMonitorAndVerifyStart();
     // Check the toggle
     await t.expect(browserPage.Profiler.saveLogSwitchButton.exists).notOk('The toggle is displayed when Profiler is started');
     // Restart Monitor with Save logs
@@ -78,7 +77,7 @@ test('Verify that when user switch toggle to OFF and started the Profiler, tempo
     const numberOfTempFiles = fs.readdirSync(tempDir).length;
 
     // Start Monitor without Save logs
-    await browserPage.Profiler.startMonitor();
+    await browserPage.Profiler.startMonitorAndVerifyStart();
     // Verify that temporary Log file is not created
     await t.expect(numberOfTempFiles).gte(fs.readdirSync(tempDir).length, 'The temporary Log file is created');
 });
@@ -97,7 +96,7 @@ test('Verify that when user see the toggle is OFF - Profiler logs are not being 
     const numberOfDownloadFiles = await databasesActions.getFileCount(fileDownloadPath, fileStarts);
 
     // Start Monitor without Save logs
-    await browserPage.Profiler.startMonitor();
+    await browserPage.Profiler.startMonitorAndVerifyStart();
     await t.wait(3000);
     // Check the download files
     await t.expect(await databasesActions.getFileCount(fileDownloadPath, fileStarts)).eql(numberOfDownloadFiles, 'The Profiler logs are saved');

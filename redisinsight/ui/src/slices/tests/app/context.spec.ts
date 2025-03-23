@@ -11,6 +11,7 @@ import reducer, {
   initialState,
   setAppContextInitialState,
   setAppContextConnectedInstanceId,
+  setAppContextConnectedRdiInstanceId,
   setBrowserPatternKeyListDataLoaded,
   setBrowserRedisearchKeyListDataLoaded,
   setBrowserSelectedKey,
@@ -23,10 +24,6 @@ import reducer, {
   appContextSelector,
   appContextBrowser,
   appContextWorkbench,
-  setWorkbenchEASearch,
-  appContextWorkbenchEA,
-  setWorkbenchEAItemScrollTop,
-  resetWorkbenchEASearch,
   setBrowserTreeNodesOpen,
   resetBrowserTree,
   appContextBrowserTree,
@@ -41,6 +38,12 @@ import reducer, {
   setDbIndexState,
   appContextDbIndex,
   setRecommendationsShowHidden,
+  appContextCapability,
+  setCapability,
+  setPipelineDialogState,
+  setLastPipelineManagementPage,
+  resetPipelineManagement,
+  appContextPipelineManagement,
 } from '../../app/context'
 
 jest.mock('uiSrc/services', () => ({
@@ -64,12 +67,16 @@ describe('slices', () => {
       expect(appContextSelector(rootState)).toEqual(initialState)
     })
 
-    it('should properly set initial state with existing contextId', () => {
+    it('should properly set initial state with existing contextId and capability and contextRdiInstanceId', () => {
       // Arrange
       const contextInstanceId = '12312-3123'
+      const contextRdiInstanceId = 'rdi-123'
+      const capability = { source: '123123' }
       const prevState = {
         ...initialState,
         contextInstanceId,
+        contextRdiInstanceId,
+        capability,
         browser: {
           ...initialState.browser,
           keyList: {
@@ -103,7 +110,9 @@ describe('slices', () => {
       }
       const state = {
         ...initialState,
-        contextInstanceId
+        contextInstanceId,
+        contextRdiInstanceId,
+        capability,
       }
 
       // Act
@@ -129,6 +138,27 @@ describe('slices', () => {
 
       // Act
       const nextState = reducer(initialState, setAppContextConnectedInstanceId(contextInstanceId))
+
+      // Assert
+      const rootState = Object.assign(initialStateDefault, {
+        app: { context: nextState },
+      })
+
+      expect(appContextSelector(rootState)).toEqual(state)
+    })
+  })
+
+  describe('setAppContextConnectedRdiInstanceId', () => {
+    it('should properly set id', () => {
+      // Arrange
+      const contextRdiInstanceId = 'rdi-123'
+      const state = {
+        ...initialState,
+        contextRdiInstanceId
+      }
+
+      // Act
+      const nextState = reducer(initialState, setAppContextConnectedRdiInstanceId(contextRdiInstanceId))
 
       // Assert
       const rootState = Object.assign(initialStateDefault, {
@@ -334,91 +364,6 @@ describe('slices', () => {
     })
   })
 
-  describe('setWorkbenchEASearch', () => {
-    it('should properly set path to opened guide page', () => {
-      // Arrange
-      const prevState = {
-        ...initialState,
-        workbench: {
-          ...initialState.workbench,
-          enablementArea: {
-            ...initialState.workbench.enablementArea,
-            search: 'static/enablement-area/guides/guide1.html',
-            itemScrollTop: 200,
-          }
-        },
-      }
-      const itemPath = 'static/enablement-area/guides/guide2.html'
-      const state = {
-        ...initialState.workbench.enablementArea,
-        search: itemPath,
-        itemScrollTop: 0,
-      }
-
-      // Act
-      const nextState = reducer(prevState, setWorkbenchEASearch(itemPath))
-
-      // Assert
-      const rootState = Object.assign(initialStateDefault, {
-        app: { context: nextState },
-      })
-
-      expect(appContextWorkbenchEA(rootState)).toEqual(state)
-    })
-  })
-
-  describe('setWorkbenchEAItemScrollTop', () => {
-    it('should properly set state', () => {
-      // Arrange
-      const state = {
-        ...initialState.workbench.enablementArea,
-        itemScrollTop: 200,
-      }
-
-      // Act
-      const nextState = reducer(initialState, setWorkbenchEAItemScrollTop(200))
-
-      // Assert
-      const rootState = Object.assign(initialStateDefault, {
-        app: { context: nextState },
-      })
-
-      expect(appContextWorkbenchEA(rootState)).toEqual(state)
-    })
-  })
-
-  describe('resetWorkbenchEASearch', () => {
-    it('should properly reset enablement-area context', () => {
-      // Arrange
-      const prevState = {
-        ...initialState,
-        workbench: {
-          ...initialState.workbench,
-          enablementArea: {
-            ...initialState.workbench.enablementArea,
-            search: 'static/enablement-area/guides/guide1.html',
-            itemScrollTop: 200,
-          }
-        },
-      }
-      const state = {
-        ...initialState.workbench.enablementArea,
-        search: '',
-        itemScrollTop: 0,
-      }
-
-      // Act
-      const nextState = reducer(prevState, resetWorkbenchEASearch())
-
-      // Assert
-      const rootState = Object.assign(initialStateDefault, {
-        app: { context: nextState },
-      })
-
-      expect(appContextWorkbenchEA(rootState)).toEqual(state)
-    })
-  })
-
   describe('setLastPageContext', () => {
     it('should properly set last page', () => {
       // Arrange
@@ -504,7 +449,7 @@ describe('slices', () => {
       // Arrange
       const data = {
         slowLogDurationUnit: 'msec',
-        treeViewDelimiter: ':-',
+        treeViewDelimiter: [{ label: ':-' }],
         treeViewSort: SortOrder.DESC,
         showHiddenRecommendations: true,
       }
@@ -551,7 +496,7 @@ describe('slices', () => {
   describe('setBrowserTreeDelimiter', () => {
     it('should properly set browser tree delimiter', () => {
       // Arrange
-      const delimiter = '_'
+      const delimiter = [{ label: '_' }]
 
       const state = {
         ...initialState.dbConfig,
@@ -692,6 +637,99 @@ describe('slices', () => {
       })
 
       expect(appContextDbIndex(rootState)).toEqual(state)
+    })
+  })
+
+  describe('setCapability', () => {
+    it('should properly set db config', () => {
+      // Arrange
+      const data = {
+        source: '123123',
+        tutorialPopoverShown: false,
+      }
+
+      const state = {
+        ...initialState.capability,
+        source: data.source,
+      }
+
+      // Act
+      const nextState = reducer(initialState, setCapability(data))
+
+      // Assert
+      const rootState = Object.assign(initialStateDefault, {
+        app: { context: nextState },
+      })
+
+      expect(appContextCapability(rootState)).toEqual(state)
+    })
+  })
+
+  describe('setPipelineDialogState', () => {
+    it('should properly set pipeline dialog state', () => {
+      // Arrange
+      const state = {
+        ...initialState.pipelineManagement,
+        isOpenDialog: false,
+      }
+
+      // Act
+      const nextState = reducer(initialState, setPipelineDialogState(false))
+
+      // Assert
+      const rootState = Object.assign(initialStateDefault, {
+        app: { context: nextState },
+      })
+
+      expect(appContextPipelineManagement(rootState)).toEqual(state)
+    })
+  })
+
+  describe('setLastPipelineManagementPage', () => {
+    it('should properly set last viewed page', () => {
+      // Arrange
+      const mockLastPage = 'name'
+      const state = {
+        ...initialState.pipelineManagement,
+        lastViewedPage: mockLastPage,
+      }
+
+      // Act
+      const nextState = reducer(initialState, setLastPipelineManagementPage(mockLastPage))
+
+      // Assert
+      const rootState = Object.assign(initialStateDefault, {
+        app: { context: nextState },
+      })
+
+      expect(appContextPipelineManagement(rootState)).toEqual(state)
+    })
+  })
+
+  describe('resetPipelineManagement', () => {
+    it('should properly set last page', () => {
+      // Arrange
+      const prevState = {
+        ...initialState,
+        pipelineManagement: {
+          lastViewedPage: 'some value',
+          isOpenDialog: false,
+        },
+      }
+      const state = {
+        lastViewedPage: '',
+        isOpenDialog: true,
+      }
+
+      // Act
+      const nextState = reducer(prevState, resetPipelineManagement())
+
+      // Assert
+      const rootState = Object.assign(initialStateDefault, {
+        app: { context: nextState },
+      })
+
+      expect(appContextPipelineManagement(rootState)).toEqual(state)
     })
   })
 })

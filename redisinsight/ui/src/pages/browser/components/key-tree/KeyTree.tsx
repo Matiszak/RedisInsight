@@ -1,8 +1,9 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import cx from 'classnames'
-
 import { useParams } from 'react-router-dom'
+import { escapeRegExp } from 'lodash'
+
 import {
   appContextBrowserTree,
   resetBrowserTree,
@@ -13,13 +14,13 @@ import { constructKeysToTree } from 'uiSrc/helpers'
 import VirtualTree from 'uiSrc/pages/browser/components/virtual-tree'
 import TreeViewSVG from 'uiSrc/assets/img/icons/treeview.svg'
 import { KeysStoreData } from 'uiSrc/slices/interfaces/keys'
-import { Nullable, bufferToString } from 'uiSrc/utils'
+import { Nullable, bufferToString, comboBoxToArray } from 'uiSrc/utils'
 import { IKeyPropTypes } from 'uiSrc/constants/prop-types/keys'
 import { KeyTypes, ModulesKeyTypes } from 'uiSrc/constants'
 import { RedisResponseBuffer, RedisString } from 'uiSrc/slices/interfaces'
 import { deleteKeyAction, selectedKeyDataSelector } from 'uiSrc/slices/browser/keys'
 import { TelemetryEvent, sendEventTelemetry } from 'uiSrc/telemetry'
-import { GetKeyInfoResponse } from 'apiSrc/modules/browser/dto'
+import { GetKeyInfoResponse } from 'apiSrc/modules/browser/keys/dto'
 
 import NoKeysMessage from '../no-keys-message'
 import styles from './styles.module.scss'
@@ -36,7 +37,6 @@ export interface Props {
   ) => void
   onDelete: (key: RedisResponseBuffer) => void
   onAddKeyPanel: (value: boolean) => void
-  onBulkActionsPanel: (value: boolean) => void
 }
 
 export const firstPanelId = 'tree'
@@ -56,18 +56,23 @@ const KeyTree = forwardRef((props: Props, ref) => {
     commonFilterType,
     deleting,
     onAddKeyPanel,
-    onBulkActionsPanel,
   } = props
 
   const { instanceId } = useParams<{ instanceId: string }>()
   const { openNodes } = useSelector(appContextBrowserTree)
-  const { treeViewDelimiter: delimiter = '', treeViewSort: sorting } = useSelector(appContextDbConfig)
+  const { treeViewDelimiter, treeViewSort: sorting } = useSelector(appContextDbConfig)
   const { nameString: selectedKeyName = null } = useSelector(selectedKeyDataSelector) ?? {}
 
   const [statusOpen, setStatusOpen] = useState(openNodes)
   const [constructingTree, setConstructingTree] = useState(false)
   const [firstDataLoaded, setFirstDataLoaded] = useState<boolean>(!!keysState.keys.length)
   const [items, setItems] = useState<IKeyPropTypes[]>(parseKeyNames(keysState.keys ?? []))
+
+  // escape regexp symbols and join and transform to regexp
+  const delimiters = comboBoxToArray(treeViewDelimiter)
+  const delimiterPattern = delimiters
+    .map(escapeRegExp)
+    .join('|')
 
   const dispatch = useDispatch()
 
@@ -88,8 +93,8 @@ const KeyTree = forwardRef((props: Props, ref) => {
   // open all parents for selected key
   const openSelectedKey = (selectedKeyName: Nullable<string> = '') => {
     if (selectedKeyName) {
-      const parts = selectedKeyName.split(delimiter)
-      const parents = parts.map((_, index) => parts.slice(0, index + 1).join(delimiter) + delimiter)
+      const parts = selectedKeyName.split(delimiterPattern)
+      const parents = parts.map((_, index) => parts.slice(0, index + 1).join(delimiterPattern) + delimiterPattern)
 
       // remove key name from parents
       parents.pop()
@@ -107,9 +112,12 @@ const KeyTree = forwardRef((props: Props, ref) => {
   }, [keysState.keys])
 
   useEffect(() => {
-    setFirstDataLoaded(true)
+    if (keysState.lastRefreshTime) {
+      setFirstDataLoaded(true)
+    }
+
     setItems(parseKeyNames(keysState.keys))
-  }, [sorting, delimiter, keysState.lastRefreshTime])
+  }, [keysState.lastRefreshTime, delimiterPattern, sorting])
 
   useEffect(() => {
     openSelectedKey(selectedKeyName)
@@ -126,7 +134,7 @@ const KeyTree = forwardRef((props: Props, ref) => {
     openSelectedKey(selectedKeyName)
   }
 
-  const handleStatusOpen = (name: string, value:boolean) => {
+  const handleStatusOpen = (name: string, value: boolean) => {
     setStatusOpen((prevState) => {
       const newState = { ...prevState }
       // add or remove opened node
@@ -163,20 +171,14 @@ const KeyTree = forwardRef((props: Props, ref) => {
   }
 
   if (keysState.keys.length === 0) {
-    const NoItemsMessage = () => {
-      if (loading || !firstDataLoaded) {
-        return <span>loading...</span>
-      }
-
-      return (
-        <NoKeysMessage
-          total={keysState.total}
-          scanned={keysState.scanned}
-          onAddKeyPanel={onAddKeyPanel}
-          onBulkActionsPanel={onBulkActionsPanel}
-        />
-      )
-    }
+    const NoItemsMessage = () => (
+      <NoKeysMessage
+        isLoading={loading || !firstDataLoaded}
+        total={keysState.total}
+        scanned={keysState.scanned}
+        onAddKeyPanel={onAddKeyPanel}
+      />
+    )
 
     return (
       <div className={cx(styles.content)}>
@@ -193,7 +195,8 @@ const KeyTree = forwardRef((props: Props, ref) => {
         <VirtualTree
           items={items}
           loadingIcon={TreeViewSVG}
-          delimiter={delimiter}
+          delimiters={delimiters}
+          delimiterPattern={delimiterPattern}
           sorting={sorting}
           deleting={deleting}
           statusSelected={selectedKeyName}
@@ -212,4 +215,4 @@ const KeyTree = forwardRef((props: Props, ref) => {
   )
 })
 
-export default KeyTree
+export default React.memo(KeyTree)

@@ -12,7 +12,7 @@ import { databaseDbIndex1634219846022 } from './1634219846022-database-db-index'
 import { encryption1634557312500 } from './1634557312500-encryption';
 import { commandExecution1641795882696 } from './1641795882696-command-execution';
 import { pluginState1641805606399 } from './1641805606399-plugin-state';
-import { sni1650278664000 } from "./1650278664000-sni";
+import { sni1650278664000 } from './1650278664000-sni';
 import { notification1655821010349 } from './1655821010349-notification';
 import { notificationCategory1659687030433 } from './1659687030433-notification-category';
 import { workbenchMode1660664717573 } from './1660664717573-workbench-mode';
@@ -38,6 +38,18 @@ import { CloudDatabaseDetails1687166457712 } from './1687166457712-cloud-databas
 import { FreeCloudDatabase1688989337247 } from './1688989337247-freeCloudDatabase';
 import { CloudCapiKeys1691061058385 } from './1691061058385-cloud-capi-keys';
 import { FeatureSso1691476419592 } from './1691476419592-feature-sso';
+import { AiHistory1713515657364 } from './1713515657364-ai-history';
+import { AiHistorySteps1714501203616 } from './1714501203616-ai-history-steps';
+import { Rdi1716370509836 } from './1716370509836-rdi';
+import { AiHistory1718260230164 } from './1718260230164-ai-history';
+import { CloudSession1729085495444 } from './1729085495444-cloud-session';
+import { CommandExecution1726058563737 } from './1726058563737-command-execution';
+import { DatabaseCreatedAt1733740794737 } from './1733740794737-database-createdAt';
+import { DbSettings1737362130798 } from './1737362130798-db-settings';
+import { DatabaseForceStandalone1738829743482 } from './1738829743482-database-forceStandalone';
+import { RdiOptionalAuth1740579711635 } from './1740579711635-rdi-optional-auth';
+import { PreSetupDatabases1741786803681 } from './1741786803681-pre-setup-databases';
+import { KeyNameFormatAdded1742303245547 } from './1742303245547-key-name-format';
 
 export default [
   initialMigration1614164490968,
@@ -80,4 +92,16 @@ export default [
   FreeCloudDatabase1688989337247,
   CloudCapiKeys1691061058385,
   FeatureSso1691476419592,
+  AiHistory1713515657364,
+  AiHistorySteps1714501203616,
+  Rdi1716370509836,
+  AiHistory1718260230164,
+  CloudSession1729085495444,
+  CommandExecution1726058563737,
+  DatabaseCreatedAt1733740794737,
+  DbSettings1737362130798,
+  DatabaseForceStandalone1738829743482,
+  RdiOptionalAuth1740579711635,
+  PreSetupDatabases1741786803681,
+  KeyNameFormatAdded1742303245547,
 ];

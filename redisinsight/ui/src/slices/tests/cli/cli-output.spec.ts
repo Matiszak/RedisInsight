@@ -1,22 +1,20 @@
 import { cloneDeep, first } from 'lodash'
 
 import { AxiosError } from 'axios'
+import { SendCommandResponse } from 'src/modules/cli/dto/cli.dto'
 import { AppDispatch, RootState } from 'uiSrc/slices/store'
 import { cleanup, clearStoreActions, initialStateDefault, mockedStore, mockStore, } from 'uiSrc/utils/test-utils'
-import { ClusterNodeRole, CommandExecutionStatus } from 'uiSrc/slices/interfaces/cli'
+import { CommandExecutionStatus } from 'uiSrc/slices/interfaces/cli'
 import { apiService } from 'uiSrc/services'
-import { cliTexts } from 'uiSrc/constants/cliOutput'
-import { cliParseTextResponseWithOffset, cliParseTextResponseWithRedirect } from 'uiSrc/utils/cliHelper'
+import { cliTexts } from 'uiSrc/components/messages/cli-output/cliOutput'
+import { cliParseTextResponseWithOffset } from 'uiSrc/utils/cliHelper'
 import ApiErrors from 'uiSrc/constants/apiErrors'
-import { processCliClient } from 'uiSrc/slices/cli/cli-settings'
 import { addErrorNotification } from 'uiSrc/slices/app/notifications'
-import { SendClusterCommandDto, SendClusterCommandResponse } from 'apiSrc/modules/cli/dto/cli.dto'
 import reducer, {
   concatToOutput,
   fetchMonitorLog,
   initialState,
   outputSelector,
-  processUnsupportedCommand,
   sendCliClusterCommandAction,
   sendCliCommand,
   sendCliCommandAction,
@@ -153,48 +151,6 @@ describe('cliOutput slice', () => {
     })
   })
 
-  describe('processUnsupportedCommand', () => {
-    it('should properly concat to output "unsupported text"', async () => {
-      // Arrange
-      const onSuccessActionMock = jest.fn()
-      const unsupportedCommands: string[] = ['sync', 'subscription']
-      const command = first(unsupportedCommands) ?? ''
-
-      const nextState = {
-        ...initialStateDefault.cli.settings,
-        unsupportedCommands,
-      }
-
-      // Assert
-      const rootState = Object.assign(initialStateDefault, {
-        cli: {
-          settings: nextState,
-        },
-      })
-
-      const tempStore = mockStore(rootState)
-
-      // Act
-      await tempStore.dispatch<any>(
-        processUnsupportedCommand(command, first(unsupportedCommands), onSuccessActionMock)
-      )
-
-      // Assert
-      const expectedActions = [
-        concatToOutput(
-          cliParseTextResponseWithOffset(
-            cliTexts.CLI_UNSUPPORTED_COMMANDS(command, unsupportedCommands.join(', ')),
-            command,
-            CommandExecutionStatus.Fail
-          )
-        ),
-      ]
-
-      expect(onSuccessActionMock).toBeCalled()
-      expect(clearStoreActions(tempStore.getActions())).toEqual(clearStoreActions(expectedActions))
-    })
-  })
-
   describe('setCliDbIndex', () => {
     it('should set correct value', () => {
       // Arrange
@@ -326,7 +282,6 @@ describe('cliOutput slice', () => {
         const expectedActions = [
           sendCliCommand(),
           sendCliCommandFailure(responsePayload.response.data.message),
-          concatToOutput(cliParseTextResponseWithOffset(errorMessage, command, CommandExecutionStatus.Fail)),
         ]
         expect(clearStoreActions(store.getActions())).toEqual(clearStoreActions(expectedActions))
       })
@@ -356,50 +311,31 @@ describe('cliOutput slice', () => {
         const expectedActions = [
           sendCliCommand(),
           sendCliCommandFailure(responsePayload.response.data.message),
-          concatToOutput(cliParseTextResponseWithOffset(errorMessage, command, CommandExecutionStatus.Fail)),
-          processCliClient(),
         ]
         expect(clearStoreActions(tempStore.getActions())).toEqual(clearStoreActions(expectedActions))
       })
     })
 
     describe('Single Node Cluster Cli command', () => {
-      const options: SendClusterCommandDto = {
-        command: 'keys *',
-        nodeOptions: {
-          host: 'localhost',
-          port: 7000,
-          enableRedirection: true,
-        },
-        role: ClusterNodeRole.All,
-      }
-
       it('call both sendCliClusterCommandAction and sendCliCommandSuccess when response status is successed', async () => {
         // Arrange
         const command = 'keys *'
-        const data: SendClusterCommandResponse[] = [
-          {
-            response: '(nil)',
-            status: CommandExecutionStatus.Success,
-            node: { host: '127.0.0.1', port: 7002, slot: 6918 },
-          },
-        ]
+        const data: SendCommandResponse = {
+          response: '(nil)',
+          status: CommandExecutionStatus.Success,
+        }
         const responsePayload = { data, status: 200 }
 
         apiService.post = jest.fn().mockResolvedValue(responsePayload)
 
         // Act
-        await store.dispatch<any>(sendCliClusterCommandAction(command, options))
+        await store.dispatch<any>(sendCliClusterCommandAction(command))
 
         // Assert
         const expectedActions = [
           sendCliCommand(),
           sendCliCommandSuccess(),
-          concatToOutput(
-            cliParseTextResponseWithRedirect(
-              first(data)?.response, command, first(data)?.status, first(data)?.node
-            )
-          ),
+          concatToOutput(cliParseTextResponseWithOffset(data.response, command, data.status)),
         ]
         expect(clearStoreActions(store.getActions())).toEqual(clearStoreActions(expectedActions))
       })
@@ -407,29 +343,22 @@ describe('cliOutput slice', () => {
       it('call both sendCliClusterCommandAction and sendCliCommandSuccess when response status is fail', async () => {
         // Arrange
         const command = 'keys *'
-        const data: SendClusterCommandResponse[] = [
-          {
-            response: null,
-            status: CommandExecutionStatus.Success,
-            node: { host: '127.0.0.1', port: 7002, slot: 6918 },
-          },
-        ]
+        const data: SendCommandResponse = {
+          response: null,
+          status: CommandExecutionStatus.Success,
+        }
         const responsePayload = { data, status: 200 }
 
         apiService.post = jest.fn().mockResolvedValue(responsePayload)
 
         // Act
-        await store.dispatch<any>(sendCliClusterCommandAction(command, options))
+        await store.dispatch<any>(sendCliClusterCommandAction(command))
 
         // Assert
         const expectedActions = [
           sendCliCommand(),
           sendCliCommandSuccess(),
-          concatToOutput(
-            cliParseTextResponseWithRedirect(
-              first(data)?.response, command, first(data)?.status, first(data)?.node
-            )
-          ),
+          concatToOutput(cliParseTextResponseWithOffset(data.response, command, data.status)),
         ]
         expect(clearStoreActions(store.getActions())).toEqual(clearStoreActions(expectedActions))
       })
@@ -448,13 +377,12 @@ describe('cliOutput slice', () => {
         apiService.post = jest.fn().mockRejectedValueOnce(responsePayload)
 
         // Act
-        await store.dispatch<any>(sendCliClusterCommandAction(command, options))
+        await store.dispatch<any>(sendCliClusterCommandAction(command))
 
         // Assert
         const expectedActions = [
           sendCliCommand(),
           sendCliCommandFailure(responsePayload.response.data.message),
-          concatToOutput(cliParseTextResponseWithOffset(errorMessage, command, CommandExecutionStatus.Fail)),
         ]
         expect(clearStoreActions(store.getActions())).toEqual(clearStoreActions(expectedActions))
       })
@@ -478,14 +406,12 @@ describe('cliOutput slice', () => {
         const tempStore = mockStore(rootState)
 
         // Act
-        await tempStore.dispatch<any>(sendCliClusterCommandAction(command, options))
+        await tempStore.dispatch<any>(sendCliClusterCommandAction(command))
 
         // Assert
         const expectedActions = [
           sendCliCommand(),
           sendCliCommandFailure(responsePayload.response.data.message),
-          concatToOutput(cliParseTextResponseWithOffset(errorMessage, command, CommandExecutionStatus.Fail)),
-          processCliClient(),
         ]
         expect(clearStoreActions(tempStore.getActions())).toEqual(clearStoreActions(expectedActions))
       })

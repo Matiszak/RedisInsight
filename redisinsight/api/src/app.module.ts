@@ -2,10 +2,8 @@ import * as fs from 'fs';
 import {
   MiddlewareConsumer, Module, NestModule, OnModuleInit,
 } from '@nestjs/common';
-import { ServeStaticModule } from '@nestjs/serve-static';
-import { RouterModule } from 'nest-router';
-import { join } from 'path';
-import config from 'src/utils/config';
+import { RouterModule } from '@nestjs/core';
+import config, { Config } from 'src/utils/config';
 import { PluginModule } from 'src/modules/plugin/plugin.module';
 import { AuthUsersJwtModule } from 'src/modules/auth-users-jwt/auth-users-jwt.module';
 import { AuthUsersNoneModule } from 'src/modules/auth-users-none/auth-users-none.module';
@@ -17,15 +15,18 @@ import { NotificationModule } from 'src/modules/notification/notification.module
 import { BulkActionsModule } from 'src/modules/bulk-actions/bulk-actions.module';
 import { ClusterMonitorModule } from 'src/modules/cluster-monitor/cluster-monitor.module';
 import { DatabaseAnalysisModule } from 'src/modules/database-analysis/database-analysis.module';
-import { TriggeredFunctionsModule } from 'src/modules/triggered-functions/triggered-functions.module';
 import { LocalDatabaseModule } from 'src/local-database.module';
 import { CoreModule } from 'src/core.module';
-import { AutodiscoveryModule } from 'src/modules/autodiscovery/autodiscovery.module';
 import { DatabaseImportModule } from 'src/modules/database-import/database-import.module';
 import { SingleUserAuthMiddleware } from 'src/common/middlewares/single-user-auth.middleware';
 import { setContentTypeHeaders } from 'src/common/utils/headers-provider.util';
 import { CustomTutorialModule } from 'src/modules/custom-tutorial/custom-tutorial.module';
 import { CloudModule } from 'src/modules/cloud/cloud.module';
+import { RdiModule } from 'src/modules/rdi/rdi.module';
+import { AiChatModule } from 'src/modules/ai/chat/ai-chat.module';
+import { AiQueryModule } from 'src/modules/ai/query/ai-query.module';
+import { InitModule } from 'src/modules/init/init.module';
+import { AnalyticsModule } from 'src/modules/analytics/analytics.module';
 import { BrowserModule } from './modules/browser/browser.module';
 import { RedisEnterpriseModule } from './modules/redis-enterprise/redis-enterprise.module';
 import { RedisSentinelModule } from './modules/redis-sentinel/redis-sentinel.module';
@@ -34,10 +35,15 @@ import { CliModule } from './modules/cli/cli.module';
 import { StaticsManagementModule } from './modules/statics-management/statics-management.module';
 import { AuthenticationMiddleware } from './middleware/authentication.middleware';
 import { ExcludeRouteMiddleware } from './middleware/exclude-route.middleware';
+import SubpathProxyMiddleware from './middleware/subpath-proxy.middleware';
+import XFrameOptionsMiddleware from './middleware/x-frame-options.middleware';
 import { routes } from './app.routes';
+import { RedisConnectionMiddleware, redisConnectionControllers } from './middleware/redis-connection';
+import { DatabaseSettingsModule } from './modules/database-settings/database-settings.module';
 
-const SERVER_CONFIG = config.get('server');
-const PATH_CONFIG = config.get('dir_path');
+const SERVER_CONFIG = config.get('server') as Config['server'];
+const PATH_CONFIG = config.get('dir_path') as Config['dir_path'];
+const STATICS_CONFIG = config.get('statics') as Config['statics'];
 const AUTHENTICATION_CONFIG = config.get('authentication');
 
 let authenticationModule = undefined;
@@ -56,12 +62,11 @@ switch(AUTHENTICATION_CONFIG.type) {
   imports: [
     LocalDatabaseModule,
     CoreModule,
-    RouterModule.forRoutes(routes),
-    AutodiscoveryModule,
+    RouterModule.register(routes),
     RedisEnterpriseModule,
     CloudModule.register(),
     RedisSentinelModule,
-    BrowserModule,
+    BrowserModule.register(),
     CliModule,
     WorkbenchModule.register(),
     PluginModule,
@@ -69,45 +74,23 @@ switch(AUTHENTICATION_CONFIG.type) {
     ProfilerModule,
     PubSubModule,
     SlowLogModule,
-    NotificationModule,
+    NotificationModule.register(),
     BulkActionsModule,
     ClusterMonitorModule,
     CustomTutorialModule.register(),
     DatabaseAnalysisModule,
     DatabaseImportModule,
-    TriggeredFunctionsModule,
     CloudModule.register(),
     authenticationModule,
-    ...(SERVER_CONFIG.staticContent
-      ? [
-        ServeStaticModule.forRoot({
-          rootPath: join(__dirname, '..', '..', '..', 'ui', 'dist'),
-          exclude: ['/api/**', `${SERVER_CONFIG.customPluginsUri}/**`, `${SERVER_CONFIG.staticUri}/**`],
-          serveStaticOptions: {
-            setHeaders: setContentTypeHeaders
-          }
-        }),
-      ]
-      : []),
-    ServeStaticModule.forRoot({
-      serveRoot: SERVER_CONFIG.customPluginsUri,
-      rootPath: join(PATH_CONFIG.customPlugins),
-      exclude: ['/api/**'],
-      serveStaticOptions: {
-        fallthrough: false,
-        setHeaders: setContentTypeHeaders
-      },
+    AiChatModule,
+    AiQueryModule.register(),
+    RdiModule.register(),
+    StaticsManagementModule.register({
+      initDefaults: STATICS_CONFIG.initDefaults,
+      autoUpdate: STATICS_CONFIG.autoUpdate,
     }),
-    ServeStaticModule.forRoot({
-      serveRoot: SERVER_CONFIG.staticUri,
-      rootPath: join(PATH_CONFIG.staticDir),
-      exclude: ['/api/**'],
-      serveStaticOptions: {
-        fallthrough: false,
-        setHeaders: setContentTypeHeaders
-      },
-    }),
-    StaticsManagementModule,
+    InitModule.register([AnalyticsModule]),
+    DatabaseSettingsModule.register(),
   ],
   controllers: [],
   providers: [],
@@ -129,6 +112,10 @@ export class AppModule implements OnModuleInit, NestModule {
 
   configure(consumer: MiddlewareConsumer) {
     consumer
+      .apply(SubpathProxyMiddleware, XFrameOptionsMiddleware)
+      .forRoutes('*');
+
+    consumer
       .apply(SingleUserAuthMiddleware)
       .exclude(...SERVER_CONFIG.excludeAuthRoutes)
       .forRoutes('*');
@@ -143,5 +130,9 @@ export class AppModule implements OnModuleInit, NestModule {
       .forRoutes(
         ...SERVER_CONFIG.excludeRoutes,
       );
+
+    consumer
+      .apply(RedisConnectionMiddleware)
+      .forRoutes(...redisConnectionControllers);
   }
 }

@@ -1,5 +1,10 @@
 import {
-  Column, Entity, ManyToOne, OneToOne, PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  Entity,
+  ManyToOne,
+  OneToOne,
+  PrimaryGeneratedColumn,
 } from 'typeorm';
 import { CaCertificateEntity } from 'src/modules/certificate/entities/ca-certificate.entity';
 import { ClientCertificateEntity } from 'src/modules/certificate/entities/client-certificate.entity';
@@ -8,15 +13,28 @@ import { Expose, Transform, Type } from 'class-transformer';
 import { SentinelMaster } from 'src/modules/redis-sentinel/models/sentinel-master';
 import { SshOptionsEntity } from 'src/modules/ssh/entities/ssh-options.entity';
 import { CloudDatabaseDetailsEntity } from 'src/modules/cloud/database/entities/cloud-database-details.entity';
+import { DatabaseSettingsEntity } from 'src/modules/database-settings/entities/database-setting.entity';
 
 export enum HostingProvider {
-  UNKNOWN = 'UNKNOWN',
-  LOCALHOST = 'LOCALHOST',
   RE_CLUSTER = 'RE_CLUSTER',
   RE_CLOUD = 'RE_CLOUD',
-  AZURE = 'AZURE',
-  AWS = 'AWS',
-  GOOGLE = 'GOOGLE',
+  REDIS_STACK = 'REDIS_STACK',
+  REDIS_ENTERPRISE = 'REDIS_ENTERPRISE',
+  AZURE_CACHE = 'AZURE_CACHE',
+  AZURE_CACHE_REDIS_ENTERPRISE = 'AZURE_CACHE_REDIS_ENTERPRISE',
+  REDIS_COMMUNITY_EDITION = 'REDIS_COMMUNITY_EDITION',
+  AWS_ELASTICACHE = 'AWS_ELASTICACHE',
+  AWS_MEMORYDB = 'AWS_MEMORYDB',
+  VALKEY = 'VALKEY',
+  MEMORYSTORE = 'MEMORYSTORE',
+  DRAGONFLY = 'DRAGONFLY',
+  KEYDB = 'KEYDB',
+  GARNET = 'GARNET',
+  KVROCKS = 'KVROCKS',
+  REDICT = 'REDICT',
+  UPSTASH = 'UPSTASH',
+  UNKNOWN_LOCALHOST = 'UNKNOWN_LOCALHOST',
+  UNKNOWN = 'UNKNOWN',
 }
 
 export enum ConnectionType {
@@ -34,6 +52,11 @@ export enum Compressor {
   SNAPPY = 'SNAPPY',
   Brotli = 'Brotli',
   PHPGZCompress = 'PHPGZCompress',
+}
+
+export enum Encoding {
+  UNICODE = 'Unicode',
+  HEX = 'HEX',
 }
 
 @Entity('database_instance')
@@ -72,32 +95,32 @@ export class DatabaseEntity {
 
   @Expose()
   @Column({ nullable: true })
-  @Transform((_, model) => (
-    model?.sentinelMaster?.name
+  @Transform((_, obj) => (
+    obj?.sentinelMaster?.name
   ), { toClassOnly: true })
   sentinelMasterName: string;
 
   @Expose()
   @Column({ nullable: true })
-  @Transform((_, model) => (
-    model?.sentinelMaster?.username
+  @Transform((_, obj) => (
+    obj?.sentinelMaster?.username
   ), { toClassOnly: true })
   sentinelMasterUsername: string;
 
   @Expose()
   @Column({ nullable: true })
-  @Transform((_, model) => (
-    model?.sentinelMaster?.password
+  @Transform((_, obj) => (
+    obj?.sentinelMaster?.password
   ), { toClassOnly: true })
   sentinelMasterPassword: string;
 
   @Expose()
-  @Transform((_, entity) => {
-    if (entity?.sentinelMasterName) {
+  @Transform((_, obj) => {
+    if (obj?.sentinelMasterName) {
       return {
-        name: entity?.sentinelMasterName,
-        username: entity?.sentinelMasterUsername,
-        password: entity?.sentinelMasterPassword,
+        name: obj?.sentinelMasterName,
+        username: obj?.sentinelMasterUsername,
+        password: obj?.sentinelMasterPassword,
       };
     }
 
@@ -160,6 +183,12 @@ export class DatabaseEntity {
   @Column({ type: 'datetime', nullable: true })
   lastConnection: Date;
 
+  @CreateDateColumn({
+    nullable: true,
+  })
+  @Expose()
+  createdAt: Date;
+
   @Expose()
   @Column({
     nullable: true,
@@ -210,6 +239,19 @@ export class DatabaseEntity {
   cloudDetails: CloudDatabaseDetailsEntity;
 
   @Expose()
+  @OneToOne(
+    () => DatabaseSettingsEntity,
+    (dbSettings) => dbSettings.database,
+    {
+      eager: true,
+      onDelete: 'CASCADE',
+      cascade: true,
+    },
+  )
+  @Type(() => DatabaseSettingsEntity)
+  dbSettings: DatabaseSettingsEntity;
+
+  @Expose()
   @Column({
     nullable: false,
     default: Compressor.NONE,
@@ -219,4 +261,16 @@ export class DatabaseEntity {
   @Expose()
   @Column({ nullable: true })
   version: string;
+
+  @Expose()
+  @Column({ nullable: true })
+  forceStandalone: boolean;
+
+  @Expose()
+  @Column({ nullable: true })
+  isPreSetup: boolean;
+
+  @Expose()
+  @Column({ nullable: true, default: Encoding.UNICODE })
+  keyNameFormat: string;
 }

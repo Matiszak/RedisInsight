@@ -62,6 +62,15 @@
   }
 }
 
+@include global.insights-open {
+  .container {
+    width: 154px !important;
+    :global(.euiFormControlLayout__childrenWrapper) {
+      width: 154px !important;
+    }
+  }
+}
+
 .searchMode {
   position: relative;
   line-height: 14px !important;
@@ -159,6 +168,19 @@
 
     &:hover {
       transform: translateY(0) !important;
+    }
+  }
+}
+
+.select {
+  width: 350px;
+  position: absolute;
+  z-index: 1;
+
+  :global {
+    .euiFormControlLayout__childrenWrapper {
+      width: 200px;
+      position: relative;
     }
   }
 }

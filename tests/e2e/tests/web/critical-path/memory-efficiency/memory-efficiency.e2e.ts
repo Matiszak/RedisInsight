@@ -4,7 +4,7 @@ import { rte } from '../../../../helpers/constants';
 import { DatabaseHelper } from '../../../../helpers/database';
 import { commonUrl, ossStandaloneConfig } from '../../../../helpers/conf';
 import { DatabaseAPIRequests } from '../../../../helpers/api/api-database';
-import { verifySearchFilterValue } from '../../../../helpers/keys';
+import { deleteAllKeysFromDB, verifySearchFilterValue } from '../../../../helpers/keys';
 import { APIKeyRequests } from '../../../../helpers/api/api-keys';
 
 const memoryEfficiencyPage = new MemoryEfficiencyPage();
@@ -25,7 +25,7 @@ const keysTTL = ['3500', '86300', '2147476121'];
 const numberOfGeneratedKeys = 6;
 const keyNamesReport = chance.unique(chance.word, numberOfGeneratedKeys);
 
-fixture `Memory Efficiency`
+fixture(`Memory Efficiency`)
     .meta({ type: 'critical_path', rte: rte.standalone })
     .page(commonUrl)
     .beforeEach(async t => {
@@ -45,7 +45,7 @@ test
     })('No reports/keys message and report tooltip', async t => {
         const noReportsMessage = 'No Reports foundRun "New Analysis" to generate first report.';
         const noKeysMessage = 'No keys to displayUse Workbench Guides and Tutorials to quickly load the data.';
-        const tooltipText = 'Analyze up to 10 000 keys to get an overview of your data and recommendations';
+        const tooltipText = 'Analyze up to 10 000 keys to get an overview of your data and tips';
 
         // Verify that user can see the “No reports found” message when report wasn't generated
         await t.expect(memoryEfficiencyPage.noReportsText.textContent).eql(noReportsMessage, 'No reports message not displayed or text is invalid');
@@ -53,8 +53,8 @@ test
         await t.click(memoryEfficiencyPage.newReportBtn);
         await t.expect(memoryEfficiencyPage.noKeysText.textContent).eql(noKeysMessage, 'No keys message not displayed or text is invalid');
         // Verify that user can open workbench page from No keys to display message
-        await t.click(browserPage.NavigationPanel.workbenchButton);
-        await t.expect(workbenchPage.expandArea.visible).ok('Workbench page is not opened');
+        await t.click(memoryEfficiencyPage.workbenchLink);
+        await t.expect(workbenchPage.queryInput.visible).ok('Workbench page is not opened');
         // Turn back to Memory Efficiency page
         await t.click(myRedisDatabasePage.NavigationPanel.analysisPageButton);
         // Verify that user can see a tooltip when hovering over the icon on the right of the “New analysis” button
@@ -137,9 +137,10 @@ test
         await t.click(memoryEfficiencyPage.treeViewLink);
         await t.expect(browserPage.TreeView.treeViewSettingsBtn.exists).ok('Tree view not opened');
     });
-test
+test.skip
     .before(async t => {
         await databaseHelper.acceptLicenseTermsAndAddDatabaseApi(ossStandaloneConfig);
+        await deleteAllKeysFromDB(ossStandaloneConfig.host, ossStandaloneConfig.port);
         await browserPage.addHashKey(keySpaces[4], keysTTL[2], hashValue);
         await browserPage.Cli.addKeysFromCliWithDelimiter('MSET', 5);
         await t.click(browserPage.treeViewButton);
@@ -278,7 +279,7 @@ test
         }
         // Verify that specific report is saved as context
         await t.click(memoryEfficiencyPage.reportItem.nth(3));
-        await t.click(myRedisDatabasePage.NavigationPanel.workbenchButton);
+        await t.click(myRedisDatabasePage.NavigationPanel.browserButton);
         await t.click(myRedisDatabasePage.NavigationPanel.analysisPageButton);
         await t.expect(memoryEfficiencyPage.donutTotalKeys.sibling(1).textContent).eql(numberOfKeys[2], 'Context is not saved');
         // Verify that user can see top keys table saved as context

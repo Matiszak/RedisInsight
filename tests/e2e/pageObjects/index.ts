@@ -7,11 +7,9 @@ import { MemoryEfficiencyPage } from './memory-efficiency-page';
 import { ClusterDetailsPage } from './cluster-details-page';
 import { PubSubPage } from './pub-sub-page';
 import { SlowLogPage } from './slow-log-page';
+import { SsoAuthorizationPage } from './sso-authorization-page';
 import { BasePage } from './base-page';
 import { InstancePage } from './instance-page';
-import { TriggersAndFunctionsLibrariesPage } from './triggers-and-functions-libraries-page';
-import { TriggersAndFunctionsFunctionsPage } from './triggers-and-functions-functions-page';
-import { WelcomePage } from './welcome-page';
 
 export {
     AutoDiscoverREDatabases,
@@ -23,9 +21,7 @@ export {
     ClusterDetailsPage,
     PubSubPage,
     SlowLogPage,
+    SsoAuthorizationPage,
     BasePage,
     InstancePage,
-    TriggersAndFunctionsLibrariesPage,
-    TriggersAndFunctionsFunctionsPage,
-    WelcomePage,
 };

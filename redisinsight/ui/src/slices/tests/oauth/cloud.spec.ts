@@ -13,9 +13,9 @@ import {
 import { INFINITE_MESSAGES, InfiniteMessagesIds } from 'uiSrc/components/notifications/components'
 import { CloudJobStatus, CloudJobName } from 'uiSrc/electron/constants'
 import successMessages from 'uiSrc/components/notifications/success-messages'
+import { setSSOFlow } from 'uiSrc/slices/instances/cloud'
 import reducer, {
   initialState,
-  setSignInDialogState,
   oauthCloudSelector,
   signIn,
   signInSuccess,
@@ -53,6 +53,10 @@ import reducer, {
   removeCapiKeyAction,
   setOAuthCloudSource,
   setSocialDialogState,
+  logoutUser,
+  logoutUserSuccess,
+  logoutUserFailure,
+  logoutUserAction, oauthCloudUserSelector, setInitialLoadingState
 } from '../../oauth/cloud'
 
 let store: typeof mockedStore
@@ -438,49 +442,6 @@ describe('oauth cloud slice', () => {
     })
   })
 
-  describe('setSignInDialogState', () => {
-    it('should properly set the source=SignInDialogSource.BrowserSearch and isOpenSignInDialog=true', () => {
-      // Arrange
-      const state = {
-        ...initialState,
-        isOpenSignInDialog: true,
-        source: OAuthSocialSource.BrowserSearch,
-      }
-
-      // Act
-      const nextState = reducer(initialState, setSignInDialogState(OAuthSocialSource.BrowserSearch))
-
-      // Assert
-      const rootState = Object.assign(initialStateDefault, {
-        oauth: { cloud: nextState },
-      })
-      expect(oauthCloudSelector(rootState)).toEqual(state)
-    })
-
-    it('should not set source=null and set and isOpenSignInDialog=false', () => {
-      // Arrange
-      const prevState = {
-        ...initialState,
-        isOpenSignInDialog: true,
-        source: OAuthSocialSource.BrowserSearch,
-      }
-      const state = {
-        ...initialState,
-        isOpenSignInDialog: false,
-        source: OAuthSocialSource.BrowserSearch,
-      }
-
-      // Act
-      const nextState = reducer(prevState, setSignInDialogState(null))
-
-      // Assert
-      const rootState = Object.assign(initialStateDefault, {
-        oauth: { cloud: nextState },
-      })
-      expect(oauthCloudSelector(rootState)).toEqual(state)
-    })
-  })
-
   describe('setSocialDialogState', () => {
     it('should properly set the source=SignInDialogSource.BrowserSearch and isOpenSocialDialog=true', () => {
       // Arrange
@@ -816,6 +777,98 @@ describe('oauth cloud slice', () => {
     })
   })
 
+  describe('logoutUser', () => {
+    it('should properly set the state', () => {
+      // Arrange
+      const state = {
+        ...initialState.user,
+        loading: true
+      }
+
+      // Act
+      const nextState = reducer(initialState, logoutUser())
+
+      // Assert
+      const rootState = Object.assign(initialStateDefault, {
+        oauth: {
+          cloud: nextState
+        }
+      })
+      expect(oauthCloudUserSelector(rootState)).toEqual(state)
+    })
+  })
+
+  describe('logoutUserSuccess', () => {
+    it('should properly set the state', () => {
+      // Arrange
+      const currentState = {
+        ...initialState,
+        user: {
+          ...initialState.user,
+          loading: true,
+          data: {}
+        }
+      }
+
+      // Act
+      const nextState = reducer(currentState as any, logoutUserSuccess())
+
+      // Assert
+      const rootState = Object.assign(initialStateDefault, {
+        oauth: {
+          cloud: nextState
+        }
+      })
+      expect(oauthCloudUserSelector(rootState)).toEqual(initialState.user)
+    })
+  })
+
+  describe('logoutUserFailure', () => {
+    it('should properly set the state', () => {
+      // Arrange
+      const currentState = {
+        ...initialState,
+        user: {
+          ...initialState.user,
+          loading: true,
+          data: {}
+        }
+      }
+
+      // Act
+      const nextState = reducer(currentState as any, logoutUserFailure())
+
+      // Assert
+      const rootState = Object.assign(initialStateDefault, {
+        oauth: {
+          cloud: nextState
+        }
+      })
+      expect(oauthCloudUserSelector(rootState)).toEqual(initialState.user)
+    })
+  })
+
+  describe('setInitialLoadingState', () => {
+    it('should properly set the state', () => {
+      // Arrange
+      const userState = {
+        ...initialState.user,
+        initialLoading: false
+      }
+
+      // Act
+      const nextState = reducer(initialState as any, setInitialLoadingState(false))
+
+      // Assert
+      const rootState = Object.assign(initialStateDefault, {
+        oauth: {
+          cloud: nextState
+        }
+      })
+      expect(oauthCloudUserSelector(rootState)).toEqual(userState)
+    })
+  })
+
   describe('thunks', () => {
     describe('fetchUserInfo', () => {
       it('call both fetchUserInfo and getUserInfoSuccess when fetch is successed', async () => {
@@ -832,11 +885,11 @@ describe('oauth cloud slice', () => {
         const expectedActions = [
           getUserInfo(),
           getUserInfoSuccess(responsePayload.data),
-          setSignInDialogState(null),
+          setSocialDialogState(null),
         ]
         expect(store.getActions()).toEqual(expectedActions)
       })
-      it('call setSelectAccountDialogState and setSignInDialogState when fetch is successed and accounts > 1', async () => {
+      it('call setSelectAccountDialogState and setSocialDialogState when fetch is successed and accounts > 1', async () => {
       // Arrange
         const data = { id: 123123, accounts: [{}, {}] }
         const responsePayload = { data, status: 200 }
@@ -852,7 +905,7 @@ describe('oauth cloud slice', () => {
           setSelectAccountDialogState(true),
           removeInfiniteNotification(InfiniteMessagesIds.oAuthProgress),
           getUserInfoSuccess(responsePayload.data),
-          setSignInDialogState(null),
+          setSocialDialogState(null),
         ]
         expect(store.getActions()).toEqual(expectedActions)
       })
@@ -987,17 +1040,19 @@ describe('oauth cloud slice', () => {
     describe('createFreeDbSuccess', () => {
       it('should call proper actions without error', async () => {
       // Arrange
-        const id = '123'
+        const result = {
+          resourceId: '123',
+        }
         const onConnect = () => {}
 
         // Act
-        await store.dispatch<any>(createFreeDbSuccess(id, {}))
+        await store.dispatch<any>(createFreeDbSuccess(result, {}, CloudJobName.CreateFreeDatabase))
 
         // Assert
         const expectedActions = [
           showOAuthProgress(true),
           removeInfiniteNotification(InfiniteMessagesIds.oAuthProgress),
-          addInfiniteNotification(INFINITE_MESSAGES.SUCCESS_CREATE_DB(onConnect)),
+          addInfiniteNotification(INFINITE_MESSAGES.SUCCESS_CREATE_DB({}, onConnect, CloudJobName.CreateFreeDatabase)),
           setSelectAccountDialogState(false),
         ]
         expect(clearStoreActions(store.getActions())).toEqual(clearStoreActions(expectedActions))
@@ -1033,13 +1088,13 @@ describe('oauth cloud slice', () => {
           getPlans(),
           getPlansSuccess(responsePayload.data),
           setIsOpenSelectPlanDialog(true),
-          setSignInDialogState(null),
+          setSocialDialogState(null),
           setSelectAccountDialogState(false),
           removeInfiniteNotification(InfiniteMessagesIds.oAuthProgress)
         ]
         expect(store.getActions()).toEqual(expectedActions)
       })
-      it('call setIsOpenSelectPlanDialog and setSignInDialogState when fetch is successed and accounts > 1', async () => {
+      it('call setIsOpenSelectPlanDialog and setSocialDialogState when fetch is successed and accounts > 1', async () => {
       // Arrange
         const data = [{
           id: 12148,
@@ -1067,7 +1122,7 @@ describe('oauth cloud slice', () => {
           getPlans(),
           getPlansSuccess(responsePayload.data),
           setIsOpenSelectPlanDialog(true),
-          setSignInDialogState(null),
+          setSocialDialogState(null),
           setSelectAccountDialogState(false),
           removeInfiniteNotification(InfiniteMessagesIds.oAuthProgress),
         ]
@@ -1226,6 +1281,49 @@ describe('oauth cloud slice', () => {
           removeCapiKey(),
           addErrorNotification(responsePayload as AxiosError),
           removeCapiKeyFailure(),
+        ]
+        expect(store.getActions()).toEqual(expectedActions)
+      })
+    })
+
+    describe('logoutUserAction', () => {
+      it('should call proper actions on succeed', async () => {
+        const responsePayload = { status: 200 }
+
+        apiService.get = jest.fn().mockResolvedValue(responsePayload)
+
+        // Act
+        await store.dispatch<any>(logoutUserAction())
+
+        // Assert
+        const expectedActions = [
+          logoutUser(),
+          setSSOFlow(),
+          logoutUserSuccess(),
+        ]
+        expect(store.getActions()).toEqual(expectedActions)
+      })
+
+      it('should call proper actions on failed', async () => {
+        const errorMessage = 'Error'
+        const responsePayload = {
+          response: {
+            status: 500,
+            data: { message: errorMessage },
+          },
+        }
+
+        apiService.get = jest.fn().mockRejectedValue(responsePayload)
+
+        // Act
+        await store.dispatch<any>(logoutUserAction())
+
+        // Assert
+        const expectedActions = [
+          logoutUser(),
+          setSSOFlow(),
+          addErrorNotification(responsePayload as AxiosError),
+          logoutUserFailure(),
         ]
         expect(store.getActions()).toEqual(expectedActions)
       })

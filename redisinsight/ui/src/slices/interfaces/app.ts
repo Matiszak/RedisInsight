@@ -1,16 +1,27 @@
 import { AxiosError } from 'axios'
+import { EuiComboBoxOptionOption } from '@elastic/eui'
 import { RelativeWidthSizes } from 'uiSrc/components/virtual-table/interfaces'
 import { Nullable } from 'uiSrc/utils'
-import { DurationUnits, FeatureFlags, ICommands, SortOrder } from 'uiSrc/constants'
+import { BrowserColumns, BrowserStorageItem, DurationUnits, FeatureFlags, ICommands, SortOrder } from 'uiSrc/constants'
+import { ConfigDBStorageItem } from 'uiSrc/constants/storage'
 import { GetServerInfoResponse } from 'apiSrc/modules/server/dto/server.dto'
 import { RedisString as RedisStringAPI } from 'apiSrc/common/constants/redis-string'
 
 export interface CustomError {
+  details?: any[];
   error: string
   message: string
   statusCode: number
   errorCode?: number
   resourceId?: string
+}
+
+export interface ErrorOptions {
+  message: string | JSX.Element
+  code?: string
+  config?: object
+  request?: object
+  response?: object
 }
 
 export interface EnhancedAxiosError extends AxiosError<CustomError> {
@@ -31,6 +42,11 @@ export interface IMessage {
   className?: string
 }
 
+export enum AppWorkspace {
+  Databases = 'databases',
+  RDI = 'redisDataIntegration'
+}
+
 export interface StateAppInfo {
   loading: boolean
   error: string
@@ -44,14 +60,22 @@ export interface StateAppInfo {
   isShortcutsFlyoutOpen: boolean
 }
 
+export interface StateAppConnectivity {
+  loading: boolean;
+  error?: string;
+}
+
 export interface StateAppContext {
+  workspace: AppWorkspace
   contextInstanceId: string
+  contextRdiInstanceId: string
   lastPage: string
   dbConfig: {
-    treeViewDelimiter: string
+    treeViewDelimiter: EuiComboBoxOptionOption[]
     treeViewSort: SortOrder
     slowLogDurationUnit: DurationUnits
     showHiddenRecommendations: boolean
+    shownColumns: BrowserColumns[]
   }
   dbIndex: {
     disabled: boolean
@@ -69,7 +93,6 @@ export interface StateAppContext {
       [key: string]: number
     }
     tree: {
-      delimiter: string
       openNodes: {
         [key: string]: boolean
       }
@@ -84,11 +107,14 @@ export interface StateAppContext {
   }
   workbench: {
     script: string
-    enablementArea: {
-      isMinimized: boolean
-      search: string
-      itemScrollTop: number
-    },
+    panelSizes: {
+      vertical: {
+        [key: string]: number
+      }
+    }
+  }
+  searchAndQuery: {
+    script: string
     panelSizes: {
       vertical: {
         [key: string]: number
@@ -102,8 +128,12 @@ export interface StateAppContext {
   analytics: {
     lastViewedPage: string
   }
-  triggeredFunctions: {
+  capability: {
+    source: string
+  }
+  pipelineManagement: {
     lastViewedPage: string
+    isOpenDialog: boolean
   }
 }
 
@@ -113,6 +143,25 @@ export interface StateAppRedisCommands {
   spec: ICommands
   commandsArray: string[]
   commandGroups: string[]
+}
+
+export interface DatabaseSettingsData {
+  [ConfigDBStorageItem.notShowConfirmationRunTutorial]?: boolean,
+  [BrowserStorageItem.treeViewDelimiter]?: {
+    label: string
+  }[]
+  [BrowserStorageItem.treeViewSort]?: SortOrder,
+  [BrowserStorageItem.showHiddenRecommendations]?: boolean,
+
+  [key: string]: any;
+}
+
+export interface DatabaseSettings {
+  loading: boolean
+  error: string
+  data: {
+    [instanceId: string]: DatabaseSettingsData
+  };
 }
 
 export interface IPluginVisualization {
@@ -211,17 +260,6 @@ export interface StateAppNotifications {
     totalUnread: number
     shouldDisplayToast: boolean
   }
-}
-
-export interface StateAppActionBar {
-  status: ActionBarStatus
-  text?: string
-  actions?: ActionBarActions[]
-}
-
-export interface ActionBarActions {
-  onClick: () => void
-  label: string
 }
 
 export enum ActionBarStatus {

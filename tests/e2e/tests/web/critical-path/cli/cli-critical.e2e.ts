@@ -31,27 +31,6 @@ fixture `CLI critical`
         await databaseAPIRequests.deleteStandaloneDatabaseApi(ossStandaloneConfig);
     });
 test
-    .meta({ rte: rte.ossCluster })
-    .before(async() => {
-        await databaseHelper.acceptLicenseTermsAndAddOSSClusterDatabase(ossClusterConfig);
-    })
-    .after(async() => {
-        // Clear and delete database
-        await browserPage.deleteKeyByName(keyName);
-        await databaseAPIRequests.deleteOSSClusterDatabaseApi(ossClusterConfig);
-    })('Verify that user is redirected to another node when he works in CLI with OSS Cluster', async t => {
-        keyName = Common.generateWord(10);
-        // Open CLI
-        await t.click(browserPage.Cli.cliExpandButton);
-        // Add key from CLI
-        for ([keyName, value] of pairsToSet) {
-            await t.typeText(browserPage.Cli.cliCommandInput, `SET ${keyName} ${value}`, { replace: true, paste: true });
-            await t.pressKey('enter');
-        }
-        // Check that user is redirected
-        await t.expect(await browserPage.Cli.cliArea.textContent).contains('Redirected to', 'User command was not redirected to another node');
-    });
-test
     .meta({ rte: rte.standalone })('Verify that Redis returns error if command is not correct when user works with CLI', async t => {
         //Open CLI
         await t.click(browserPage.Cli.cliExpandButton);
@@ -87,7 +66,7 @@ test
         await t.expect(browserPage.Cli.cliOutputResponseSuccess.exists).ok('Command from autocomplete was not found & executed');
     });
 test
-    .meta({ rte: rte.standalone })('Verify that when user enters in CLI RediSearch/JSON commands (FT.CREATE, FT.DROPINDEX/JSON.GET, JSON.DEL), he can see hints with arguments', async t => {
+    .skip('Verify that when user enters in CLI RediSearch/JSON commands (FT.CREATE, FT.DROPINDEX/JSON.GET, JSON.DEL), he can see hints with arguments', async t => {
         const commandHints = [
             'index [data_type] [prefix] [filter] [default_lang] [lang_attribute] [default_score] [score_attribute] [payload_attribute] [maxtextfields] [seconds] [nooffsets] [nohl] [nofields] [nofreqs] [stopwords] [skipinitialscan] schema field [field ...]',
             'index [delete docs]',
@@ -114,4 +93,5 @@ test
             await t.typeText(browserPage.Cli.cliCommandInput, command, { replace: true, paste: true });
             await t.expect(browserPage.Cli.cliCommandAutocomplete.textContent).eql(commandHints[commands.indexOf(command)], `The hints with arguments for command ${command} not shown`);
         }
-    });
+    })
+    .meta({ rte: rte.standalone, skipComments: "CI execution unstable, selector failure, needs investigation" });

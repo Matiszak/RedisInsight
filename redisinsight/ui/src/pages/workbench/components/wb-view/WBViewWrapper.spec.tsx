@@ -10,8 +10,8 @@ import {
   screen,
   act,
 } from 'uiSrc/utils/test-utils'
-import QueryWrapper from 'uiSrc/components/query'
-import { Props as QueryProps } from 'uiSrc/components/query/QueryWrapper'
+import QueryWrapper from 'uiSrc/pages/workbench/components/query'
+import { Props as QueryProps } from 'uiSrc/pages/workbench/components/query/QueryWrapper'
 import { connectedInstanceSelector } from 'uiSrc/slices/instances/instances'
 import {
   clearWbResults,
@@ -21,7 +21,6 @@ import {
   workbenchResultsSelector
 } from 'uiSrc/slices/workbench/wb-results'
 
-import { getWBCustomTutorials } from 'uiSrc/slices/workbench/wb-custom-tutorials'
 import WBViewWrapper from './WBViewWrapper'
 
 let store: typeof mockedStore
@@ -31,7 +30,7 @@ beforeEach(() => {
   store.clearActions()
 })
 
-jest.mock('uiSrc/components/query', () => ({
+jest.mock('uiSrc/pages/workbench/components/query', () => ({
   __esModule: true,
   namedExport: jest.fn(),
   default: jest.fn(),
@@ -81,16 +80,6 @@ jest.mock('uiSrc/slices/workbench/wb-results', () => ({
   })
 }))
 
-jest.mock('uiSrc/slices/workbench/wb-guides', () => {
-  const defaultState = jest.requireActual('uiSrc/slices/workbench/wb-guides').initialState
-  return {
-    ...jest.requireActual('uiSrc/slices/workbench/wb-guides'),
-    workbenchGuidesSelector: jest.fn().mockReturnValue({
-      ...defaultState,
-    }),
-  }
-})
-
 jest.mock('uiSrc/slices/workbench/wb-tutorials', () => {
   const defaultState = jest.requireActual('uiSrc/slices/workbench/wb-tutorials').initialState
   return {
@@ -113,7 +102,7 @@ describe('WBViewWrapper', () => {
   it('should render with SessionStorage', () => {
     render(<WBViewWrapper />)
 
-    const expectedActions = [getWBCustomTutorials(), loadWBHistory()]
+    const expectedActions = [loadWBHistory()]
     expect(clearStoreActions(store.getActions().slice(0, expectedActions.length))).toEqual(
       clearStoreActions(expectedActions)
     )

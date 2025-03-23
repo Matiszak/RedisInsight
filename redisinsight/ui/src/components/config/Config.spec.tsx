@@ -1,24 +1,35 @@
 import React from 'react'
-import { cloneDeep } from 'lodash'
+import { cloneDeep, set } from 'lodash'
+import { waitFor } from '@testing-library/react'
 import { BuildType } from 'uiSrc/constants/env'
 import { localStorageService } from 'uiSrc/services'
-import { getFeatureFlags, setFeaturesToHighlight, setOnboarding } from 'uiSrc/slices/app/features'
+import { setFeaturesToHighlight, setOnboarding } from 'uiSrc/slices/app/features'
 import { getNotifications } from 'uiSrc/slices/app/notifications'
-import { render, mockedStore, cleanup, MOCKED_HIGHLIGHTING_FEATURES } from 'uiSrc/utils/test-utils'
+import {
+  render,
+  mockedStore,
+  cleanup,
+  MOCKED_HIGHLIGHTING_FEATURES,
+  initialStateDefault,
+  mockStore
+} from 'uiSrc/utils/test-utils'
 
 import {
   getUserConfigSettings,
+  getUserSettingsSpec,
   setSettingsPopupState,
   userSettingsSelector,
 } from 'uiSrc/slices/user/user-settings'
-import { appServerInfoSelector, getServerInfo } from 'uiSrc/slices/app/info'
+import { appServerInfoSelector, getServerInfo, setServerLoaded } from 'uiSrc/slices/app/info'
 import { processCliClient } from 'uiSrc/slices/cli/cli-settings'
 import { getRedisCommands } from 'uiSrc/slices/app/redis-commands'
 import { ONBOARDING_FEATURES } from 'uiSrc/components/onboarding-features'
-import { getWBGuides } from 'uiSrc/slices/workbench/wb-guides'
 import { getWBTutorials } from 'uiSrc/slices/workbench/wb-tutorials'
 import { getContentRecommendations } from 'uiSrc/slices/recommendations/recommendations'
 import { getGuideLinks } from 'uiSrc/slices/content/guide-links'
+import { getWBCustomTutorials } from 'uiSrc/slices/workbench/wb-custom-tutorials'
+import { setCapability } from 'uiSrc/slices/app/context'
+import { FeatureFlags } from 'uiSrc/constants'
 import Config from './Config'
 
 let store: typeof mockedStore
@@ -56,22 +67,77 @@ jest.mock('uiSrc/services', () => ({
 const onboardingTotalSteps = Object.keys(ONBOARDING_FEATURES)?.length
 
 describe('Config', () => {
-  it('should render', () => {
+  it('should render with spec call', async () => {
+    set(
+      store,
+      `app.features.featureFlags.features.${FeatureFlags.envDependent}`,
+      { flag: true }
+    )
+
     render(<Config />)
     const afterRenderActions = [
+      setCapability(),
       getServerInfo(),
+      getNotifications(),
+      getWBCustomTutorials(),
       processCliClient(),
       getRedisCommands(),
-      getNotifications(),
       getContentRecommendations(),
       getGuideLinks(),
-      getWBGuides(),
       getWBTutorials(),
-      getFeatureFlags(),
       getUserConfigSettings(),
       setSettingsPopupState(false)
     ]
     expect(store.getActions()).toEqual([...afterRenderActions])
+    await waitFor(() => expect(store.getActions()).toContainEqual(getUserSettingsSpec()))
+  })
+
+  it('should render w/o settings spec call', async () => {
+    set(
+      store,
+      `app.features.featureFlags.features.${FeatureFlags.envDependent}`,
+      { flag: false }
+    )
+
+    render(<Config />)
+
+    const afterRenderActions = [
+      setCapability(),
+      getServerInfo(),
+      getNotifications(),
+      getWBCustomTutorials(),
+      processCliClient(),
+      getRedisCommands(),
+      getContentRecommendations(),
+      getGuideLinks(),
+      getWBTutorials(),
+      getUserConfigSettings(),
+      setSettingsPopupState(false)
+    ]
+    expect(store.getActions()).toEqual([...afterRenderActions])
+    await waitFor(() => expect(store.getActions()).not.toContainEqual(getUserSettingsSpec()))
+  })
+
+  it('should render expected actions when envDependant feature is off', () => {
+    const initialStoreState = set(
+      cloneDeep(initialStateDefault),
+      `app.features.featureFlags.features.${FeatureFlags.envDependent}`,
+      { flag: false }
+    )
+    const mockedStore = mockStore(initialStoreState)
+
+    render(<Config />, { store: mockedStore })
+    const afterRenderActions = [
+      setCapability(),
+      setServerLoaded(),
+      processCliClient(),
+      getRedisCommands(),
+      getContentRecommendations(),
+      getGuideLinks(),
+      getWBTutorials(),
+      getUserConfigSettings(),
+    ]
+    expect(mockedStore.getActions()).toEqual([...afterRenderActions])
   })
 
   it('should call the list of actions', () => {
@@ -86,7 +152,7 @@ describe('Config', () => {
             required: true,
             editable: false,
             since: '1.0.0',
-            title: 'EULA: RedisInsight License Terms',
+            title: 'EULA: Redis Insight License Terms',
             label: 'Label',
           },
         },
@@ -95,15 +161,15 @@ describe('Config', () => {
     userSettingsSelector.mockImplementation(userSettingsSelectorMock)
     render(<Config />)
     const afterRenderActions = [
+      setCapability(),
       getServerInfo(),
+      getNotifications(),
+      getWBCustomTutorials(),
       processCliClient(),
       getRedisCommands(),
-      getNotifications(),
       getContentRecommendations(),
       getGuideLinks(),
-      getWBGuides(),
       getWBTutorials(),
-      getFeatureFlags(),
       getUserConfigSettings(),
       setSettingsPopupState(true),
     ]

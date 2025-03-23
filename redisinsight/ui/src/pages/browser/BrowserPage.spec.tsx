@@ -9,13 +9,13 @@ import {
   setBrowserBulkActionOpen,
   setBrowserPanelSizes,
   setBrowserSelectedKey,
-  setLastPageContext
 } from 'uiSrc/slices/app/context'
 import BrowserPage from './BrowserPage'
 import KeyList, { Props as KeyListProps } from './components/key-list/KeyList'
-import KeyDetailsWrapper, {
+import {
   Props as KeyDetailsWrapperProps
-} from './components/key-details/KeyDetailsWrapper'
+} from './modules/key-details/KeyDetails'
+import { KeyDetails } from './modules'
 import AddKey, { Props as AddKeyProps } from './components/add-key/AddKey'
 import BrowserSearchPanel from './components/browser-search-panel'
 import { Props as KeysHeaderProps } from './components/keys-header/KeysHeader'
@@ -32,10 +32,9 @@ jest.mock('./components/add-key/AddKey', () => ({
   default: jest.fn(),
 }))
 
-jest.mock('./components/key-details/KeyDetailsWrapper', () => ({
+jest.mock('uiSrc/pages/browser/modules', () => ({
   __esModule: true,
-  namedExport: jest.fn(),
-  default: jest.fn(),
+  KeyDetails: jest.fn(),
 }))
 
 jest.mock('./components/browser-search-panel', () => ({
@@ -103,7 +102,7 @@ describe('BrowserPage', () => {
   beforeAll(() => {
     KeyList.mockImplementation(mockKeyList)
     BrowserSearchPanel.mockImplementation(mockBrowserSearchPanel)
-    KeyDetailsWrapper.mockImplementation(mockKeyDetailsWrapper)
+    KeyDetails.mockImplementation(mockKeyDetailsWrapper)
     AddKey.mockImplementation(mockAddKey)
   })
 
@@ -119,7 +118,7 @@ describe('BrowserPage', () => {
 
     fireEvent.click(screen.getByTestId('handleAddKeyPanel-btn'))
 
-    const expectedActions = [resetKeyInfo(), toggleBrowserFullScreen(false)]
+    const expectedActions = [resetKeyInfo(), toggleBrowserFullScreen(false), setBrowserSelectedKey(null)]
     expect(store.getActions()).toEqual([...afterRenderActions, ...expectedActions])
   })
 
@@ -161,7 +160,6 @@ describe('BrowserPage', () => {
       setBrowserPanelSizes(expect.any(Object)),
       setBrowserBulkActionOpen(expect.any(Boolean)),
       setBrowserSelectedKey(null),
-      setLastPageContext('browser'),
       toggleBrowserFullScreen(false)
     ]
 

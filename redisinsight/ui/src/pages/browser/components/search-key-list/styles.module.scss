@@ -2,7 +2,6 @@
   flex-grow: 1;
   height: 36px;
   position: relative;
-  max-width: 708px;
 
   :global(.euiFormControlLayout) {
     max-width: calc(100%) !important;
@@ -30,4 +29,19 @@
   margin-left: 40px;
   margin-right: 50px;
   word-break: break-all;
+}
+
+.askCopilotBtn {
+  margin-left: 4px;
+
+  .cloudIcon {
+    width: 14px;
+    height: 14px;
+
+    :global {
+      path {
+        fill: var(--triggerIconActiveColor) !important;
+      }
+    }
+  }
 }

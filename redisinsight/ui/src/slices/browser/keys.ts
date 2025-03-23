@@ -11,7 +11,9 @@ import {
   ENDPOINT_BASED_ON_KEY_TYPE,
   SearchHistoryMode,
   SortOrder,
-  STRING_MAX_LENGTH
+  STRING_MAX_LENGTH,
+  ModulesKeyTypes,
+  BrowserColumns
 } from 'uiSrc/constants'
 import {
   getApiErrorMessage,
@@ -28,28 +30,25 @@ import {
 import { DEFAULT_SEARCH_MATCH, SCAN_COUNT_DEFAULT } from 'uiSrc/constants/api'
 import { getBasedOnViewTypeEvent, sendEventTelemetry, TelemetryEvent, getAdditionalAddedEventData, getMatchType } from 'uiSrc/telemetry'
 import successMessages from 'uiSrc/components/notifications/success-messages'
-import { IKeyPropTypes } from 'uiSrc/constants/prop-types/keys'
-import { resetBrowserTree } from 'uiSrc/slices/app/context'
+import { IFetchKeyArgs, IKeyPropTypes } from 'uiSrc/constants/prop-types/keys'
+import { resetBrowserTree, setBrowserSelectedKey } from 'uiSrc/slices/app/context'
 
-import {
-  CreateListWithExpireDto,
-  SetStringWithExpireDto,
-  CreateZSetWithExpireDto,
-  CreateHashWithExpireDto,
-  CreateRejsonRlWithExpireDto,
-  CreateSetWithExpireDto,
-  GetKeyInfoResponse,
-  GetKeysWithDetailsResponse,
-} from 'apiSrc/modules/browser/dto'
-import { CreateStreamDto } from 'apiSrc/modules/browser/dto/stream.dto'
+import { CreateListWithExpireDto, } from 'apiSrc/modules/browser/list/dto'
+import { SetStringWithExpireDto } from 'apiSrc/modules/browser/string/dto'
+import { CreateZSetWithExpireDto, } from 'apiSrc/modules/browser/z-set/dto'
+import { CreateHashWithExpireDto } from 'apiSrc/modules/browser/hash/dto'
+import { CreateRejsonRlWithExpireDto } from 'apiSrc/modules/browser/rejson-rl/dto'
+import { CreateSetWithExpireDto } from 'apiSrc/modules/browser/set/dto'
+import { GetKeyInfoResponse, GetKeysWithDetailsResponse } from 'apiSrc/modules/browser/keys/dto'
+import { CreateStreamDto } from 'apiSrc/modules/browser/stream/dto'
 
 import { fetchString } from './string'
-import { setZsetInitialState, fetchZSetMembers } from './zset'
-import { fetchSetMembers } from './set'
+import { setZsetInitialState, fetchZSetMembers, refreshZsetMembersAction } from './zset'
+import { fetchSetMembers, refreshSetMembersAction } from './set'
 import { fetchReJSON } from './rejson'
-import { setHashInitialState, fetchHashFields } from './hash'
-import { setListInitialState, fetchListElements } from './list'
-import { fetchStreamEntries, setStreamInitialState } from './stream'
+import { setHashInitialState, fetchHashFields, refreshHashFieldsAction } from './hash'
+import { setListInitialState, fetchListElements, refreshListElementsAction } from './list'
+import { fetchStreamEntries, refreshStream, setStreamInitialState } from './stream'
 import {
   deleteRedisearchHistoryAction,
   deleteRedisearchKeyFromList,
@@ -93,6 +92,7 @@ export const initialState: KeysStore = {
   selectedKey: {
     loading: false,
     refreshing: false,
+    isRefreshDisabled: false,
     lastRefreshTime: null,
     error: '',
     data: null,
@@ -177,6 +177,7 @@ const keysSlice = createSlice({
       state.selectedKey = {
         ...state.selectedKey,
         loading: false,
+        isRefreshDisabled: false,
         data: {
           ...payload,
           nameString: bufferToString(payload.name),
@@ -238,11 +239,11 @@ const keysSlice = createSlice({
       state.deleting = false
     },
     deletePatternKeyFromList: (state, { payload }) => {
-      remove(state.data?.keys, (key) => isEqualBuffers(key.name, payload))
+      remove(state.data?.keys, (key) => isEqualBuffers(key.name as RedisResponseBuffer, payload))
 
       state.data = {
         ...state.data,
-        total: state.data.total - 1,
+        total: Math.max(state.data.total - 1, 0),
         scanned: state.data.scanned - 1,
       }
     },
@@ -271,9 +272,12 @@ const keysSlice = createSlice({
     },
     editPatternKeyFromList: (state, { payload }) => {
       const keys = state.data.keys.map((key) => {
-        if (isEqualBuffers(key.name, payload?.key)) {
-          key.name = payload?.newKey
-          key.nameString = bufferToString(payload?.newKey)
+        if (isEqualBuffers(key.name as RedisResponseBuffer, payload?.key)) {
+          return {
+            ...key,
+            name: payload?.newKey,
+            nameString: bufferToString(payload?.newKey)
+          }
         }
         return key
       })
@@ -286,7 +290,7 @@ const keysSlice = createSlice({
 
     editPatternKeyTTLFromList: (state, { payload: [key, ttl] }: PayloadAction<[RedisResponseBuffer, number]>) => {
       const keys = state.data.keys.map((keyData) => {
-        if (isEqualBuffers(keyData.name, key)) {
+        if (isEqualBuffers(keyData.name as RedisResponseBuffer, key)) {
           keyData.ttl = ttl
         }
         return keyData
@@ -348,11 +352,12 @@ const keysSlice = createSlice({
       state.filter = payload
     },
 
-    changeKeyViewType: (state, { payload }:{ payload: KeyViewType }) => {
+    changeKeyViewType: (state, { payload }: { payload: KeyViewType }) => {
       state.viewType = payload
+      localStorageService?.set(BrowserStorageItem.browserViewType, payload)
     },
 
-    changeSearchMode: (state, { payload }:{ payload: SearchMode }) => {
+    changeSearchMode: (state, { payload }: { payload: SearchMode }) => {
       state.searchMode = payload
     },
 
@@ -415,6 +420,9 @@ const keysSlice = createSlice({
     deleteSearchHistoryFailure: (state) => {
       state.searchHistory.loading = false
     },
+    setSelectedKeyRefreshDisabled: (state, { payload }: PayloadAction<boolean>) => {
+      state.selectedKey.isRefreshDisabled = payload
+    },
   },
 })
 
@@ -464,6 +472,7 @@ export const {
   deleteSearchHistory,
   deleteSearchHistorySuccess,
   deleteSearchHistoryFailure,
+  setSelectedKeyRefreshDisabled,
 } = keysSlice.actions
 
 // A selector
@@ -514,6 +523,7 @@ export function fetchPatternKeysAction(
       sourceKeysFetch = CancelToken.source()
 
       const state = stateInit()
+      const scanThreshold = state.user.settings.config?.scanThreshold || SCAN_COUNT_DEFAULT
       const { search: match, filter: type } = state.browser.keys
       const { encoding } = state.app.info
 
@@ -523,7 +533,12 @@ export function fetchPatternKeysAction(
           ApiEndpoints.KEYS
         ),
         {
-          cursor, count, type, match: match || DEFAULT_SEARCH_MATCH, keysInfo: false,
+          cursor,
+          count,
+          type,
+          match: match || DEFAULT_SEARCH_MATCH,
+          keysInfo: false,
+          scanThreshold,
         },
         {
           params: { encoding },
@@ -535,7 +550,7 @@ export function fetchPatternKeysAction(
       if (isStatusSuccessful(status)) {
         dispatch(
           loadKeysSuccess({
-            data: parseKeysListResponse({}, data),
+            data: parseKeysListResponse({}, data as never[]),
             isSearched: !!match,
             isFiltered: !!type,
           })
@@ -565,7 +580,8 @@ export function fetchPatternKeysAction(
         }
         onSuccess?.(data)
       }
-    } catch (error) {
+    } catch (_err) {
+      const error = _err as AxiosError
       if (!axios.isCancel(error)) {
         const errorMessage = getApiErrorMessage(error)
         dispatch(addErrorNotification(error))
@@ -588,6 +604,7 @@ export function fetchMorePatternKeysAction(oldKeys: IKeyPropTypes[] = [], cursor
       sourceKeysFetch = CancelToken.source()
 
       const state = stateInit()
+      const scanThreshold = state.user.settings.config?.scanThreshold ?? SCAN_COUNT_DEFAULT
       const { search: match, filter: type } = state.browser.keys
       const { encoding } = state.app.info
       const { data, status } = await apiService.post(
@@ -596,7 +613,7 @@ export function fetchMorePatternKeysAction(oldKeys: IKeyPropTypes[] = [], cursor
           ApiEndpoints.KEYS
         ),
         {
-          cursor, count, type, match: match || DEFAULT_SEARCH_MATCH, keysInfo: false,
+          cursor, count, type, match: match || DEFAULT_SEARCH_MATCH, keysInfo: false, scanThreshold
         },
         {
           params: { encoding },
@@ -625,7 +642,8 @@ export function fetchMorePatternKeysAction(oldKeys: IKeyPropTypes[] = [], cursor
           }
         })
       }
-    } catch (error) {
+    } catch (_err) {
+      const error = _err as AxiosError
       if (!axios.isCancel(error)) {
         const errorMessage = getApiErrorMessage(error)
         dispatch(addErrorNotification(error))
@@ -636,10 +654,14 @@ export function fetchMorePatternKeysAction(oldKeys: IKeyPropTypes[] = [], cursor
 }
 
 // Asynchronous thunk action
-export function fetchKeyInfo(key: RedisResponseBuffer, resetData?: boolean) {
+export function fetchKeyInfo(
+  key: RedisResponseBuffer,
+  resetData?: boolean,
+  onSuccess?: (data: Nullable<IKeyPropTypes>) => void
+) {
   return async (dispatch: AppDispatch, stateInit: () => RootState) => {
     dispatch(defaultSelectedKeyAction())
-
+    const { shownColumns } = stateInit()?.app?.context?.dbConfig
     try {
       const state = stateInit()
       const { encoding } = state.app.info
@@ -648,13 +670,17 @@ export function fetchKeyInfo(key: RedisResponseBuffer, resetData?: boolean) {
           state.connections.instances?.connectedInstance?.id ?? '',
           ApiEndpoints.KEY_INFO
         ),
-        { keyName: key },
+        {
+          keyName: key,
+          includeSize: shownColumns.includes(BrowserColumns.Size)
+        },
         { params: { encoding } }
       )
 
       if (isStatusSuccessful(status)) {
         dispatch(loadKeyInfoSuccess(data))
         dispatch(updateSelectedKeyRefreshTime(Date.now()))
+        onSuccess?.(data)
       }
 
       if (data.type === KeyTypes.Hash) {
@@ -678,7 +704,7 @@ export function fetchKeyInfo(key: RedisResponseBuffer, resetData?: boolean) {
         dispatch<any>(fetchSetMembers(key, 0, SCAN_COUNT_DEFAULT, '*', resetData))
       }
       if (data.type === KeyTypes.ReJSON) {
-        dispatch<any>(fetchReJSON(key, '.', resetData))
+        dispatch<any>(fetchReJSON(key, '$', data.length, resetData))
       }
       if (data.type === KeyTypes.Stream) {
         const { viewType } = state.browser.stream
@@ -697,6 +723,11 @@ export function fetchKeyInfo(key: RedisResponseBuffer, resetData?: boolean) {
       const errorMessage = getApiErrorMessage(error)
       dispatch(addErrorNotification(error))
       dispatch(defaultSelectedKeyActionFailure(errorMessage))
+      const status = get(error, ['response', 'status'])
+      if (status && isStatusNotFoundError(status)) {
+        dispatch(resetKeyInfo())
+        dispatch(setBrowserSelectedKey(null));
+      }
     }
   }
 }
@@ -704,6 +735,7 @@ export function fetchKeyInfo(key: RedisResponseBuffer, resetData?: boolean) {
 // Asynchronous thunk action
 export function refreshKeyInfoAction(key: RedisResponseBuffer) {
   return async (dispatch: AppDispatch, stateInit: () => RootState) => {
+    const { shownColumns } = stateInit()?.app?.context?.dbConfig
     dispatch(refreshKeyInfo())
     try {
       const state = stateInit()
@@ -713,17 +745,22 @@ export function refreshKeyInfoAction(key: RedisResponseBuffer) {
           state.connections.instances?.connectedInstance?.id ?? '',
           ApiEndpoints.KEY_INFO
         ),
-        { keyName: key },
+        {
+          keyName: key,
+          includeSize: shownColumns.includes(BrowserColumns.Size)
+        },
         { params: { encoding } }
       )
       if (isStatusSuccessful(status)) {
         dispatch(refreshKeyInfoSuccess(data))
         dispatch(updateSelectedKeyRefreshTime(Date.now()))
       }
-    } catch (error) {
+    } catch (_err) {
+      const error = _err as AxiosError
       dispatch(refreshKeyInfoFail())
       dispatch(addErrorNotification(error))
-      if (isStatusNotFoundError(get(error, ['response', 'status']))) {
+      const status = get(error, ['response', 'status'])
+      if (status && isStatusNotFoundError(status)) {
         dispatch(resetKeyInfo())
         dispatch(deleteKeyFromList(key))
       }
@@ -771,7 +808,8 @@ function addTypedKey(
           }
         })
       }
-    } catch (error) {
+    } catch (_err) {
+      const error = _err as AxiosError
       if (onFailAction) {
         onFailAction()
       }
@@ -873,7 +911,8 @@ export function deleteSelectedKeyAction(
         onSuccessAction?.()
         dispatch(addMessageNotification(successMessages.DELETED_KEY(key)))
       }
-    } catch (error) {
+    } catch (_err) {
+      const error = _err as AxiosError
       const errorMessage = getApiErrorMessage(error as AxiosError)
       dispatch(addErrorNotification(error as AxiosError))
       dispatch(deleteSelectedKeyFailure(errorMessage))
@@ -908,7 +947,8 @@ export function deleteKeyAction(
         onSuccessAction?.()
         dispatch(addMessageNotification(successMessages.DELETED_KEY(key)))
       }
-    } catch (error) {
+    } catch (_err) {
+      const error = _err as AxiosError
       dispatch(addErrorNotification(error as AxiosError))
       dispatch(deleteKeyFailure())
     }
@@ -941,7 +981,8 @@ export function editKey(
         dispatch<any>(editKeyFromList({ key, newKey }))
         onSuccess?.()
       }
-    } catch (error) {
+    } catch (_err) {
+      const error = _err as AxiosError
       const errorMessage = getApiErrorMessage(error)
       dispatch(addErrorNotification(error))
       dispatch(defaultSelectedKeyActionFailure(errorMessage))
@@ -988,7 +1029,8 @@ export function editKeyTTL(key: RedisResponseBuffer, ttl: number) {
         }
         dispatch(defaultSelectedKeyActionSuccess())
       }
-    } catch (error) {
+    } catch (_err) {
+      const error = _err as AxiosError
       const errorMessage = getApiErrorMessage(error)
       dispatch(addErrorNotification(error))
       dispatch(defaultSelectedKeyActionFailure(errorMessage))
@@ -1005,6 +1047,7 @@ export function fetchKeysMetadata(
   onFailAction?: () => void
 ) {
   return async (_dispatch: AppDispatch, stateInit: () => RootState) => {
+    const { shownColumns } = stateInit()?.app?.context?.dbConfig
     try {
       const state = stateInit()
       const { data } = await apiService.post<GetKeyInfoResponse[]>(
@@ -1012,7 +1055,12 @@ export function fetchKeysMetadata(
           state.connections.instances?.connectedInstance?.id,
           ApiEndpoints.KEYS_METADATA
         ),
-        { keys, type: filter || undefined },
+        {
+          keys,
+          type: filter || undefined,
+          includeSize: shownColumns.includes(BrowserColumns.Size),
+          includeTTL: shownColumns.includes(BrowserColumns.TTL),
+        },
         { params: { encoding: state.app.info.encoding }, signal }
       )
 
@@ -1036,6 +1084,7 @@ export function fetchKeysMetadataTree(
   onFailAction?: () => void
 ) {
   return async (_dispatch: AppDispatch, stateInit: () => RootState) => {
+    const { shownColumns } = stateInit()?.app?.context?.dbConfig
     try {
       const state = stateInit()
       const { data } = await apiService.post<GetKeyInfoResponse[]>(
@@ -1043,7 +1092,12 @@ export function fetchKeysMetadataTree(
           state.connections.instances?.connectedInstance?.id,
           ApiEndpoints.KEYS_METADATA
         ),
-        { keys: keys.map(([,nameBuffer]) => nameBuffer), type: filter || undefined },
+        {
+          keys: keys.map(([, nameBuffer]) => nameBuffer),
+          type: filter || undefined,
+          includeSize: shownColumns.includes(BrowserColumns.Size),
+          includeTTL: shownColumns.includes(BrowserColumns.TTL),
+        },
         { params: { encoding: state.app.info.encoding }, signal }
       )
 
@@ -1247,5 +1301,49 @@ export function editKeyTTLFromList(data: [RedisResponseBuffer, number]) {
     return state.browser.keys?.searchMode === SearchMode.Pattern
       ? dispatch(editPatternKeyTTLFromList(data))
       : dispatch(editRedisearchKeyTTLFromList(data))
+  }
+}
+
+export function refreshKey(
+  key: RedisResponseBuffer,
+  type: KeyTypes | ModulesKeyTypes,
+  args?: IFetchKeyArgs,
+  length?: number
+) {
+  return async (dispatch: AppDispatch) => {
+    const resetData = false
+    dispatch(refreshKeyInfoAction(key))
+    switch (type) {
+      case KeyTypes.Hash: {
+        dispatch(refreshHashFieldsAction(key, resetData))
+        break
+      }
+      case KeyTypes.ZSet: {
+        dispatch(refreshZsetMembersAction(key, resetData))
+        break
+      }
+      case KeyTypes.Set: {
+        dispatch(refreshSetMembersAction(key, resetData))
+        break
+      }
+      case KeyTypes.List: {
+        dispatch(refreshListElementsAction(key, resetData))
+        break
+      }
+      case KeyTypes.String: {
+        dispatch(fetchString(key, { resetData, end: args?.end || STRING_MAX_LENGTH }))
+        break
+      }
+      case KeyTypes.ReJSON: {
+        dispatch(fetchReJSON(key, '$', length, true))
+        break
+      }
+      case KeyTypes.Stream: {
+        dispatch(refreshStream(key, resetData))
+        break
+      }
+      default:
+        dispatch(fetchKeyInfo(key, resetData))
+    }
   }
 }

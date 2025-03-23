@@ -1,155 +1,207 @@
-import React, { useEffect, useState } from 'react'
+import React, { useContext, useState, useMemo } from 'react'
 import cx from 'classnames'
-import { EuiFlexGroup, EuiFlexItem, EuiIcon, EuiToolTip } from '@elastic/eui'
-import MoreInfoPopover from 'uiSrc/components/database-overview/components/MoreInfoPopover'
-import { sortModulesByName } from 'uiSrc/utils/modules'
+import { useDispatch, useSelector } from 'react-redux'
+import { EuiButton, EuiFlexGroup, EuiFlexItem, EuiIcon, EuiToolTip } from '@elastic/eui'
+import { getConfig } from 'uiSrc/config'
 
-import { AdditionalRedisModule } from 'apiSrc/modules/database/models/additional.redis.module'
-import { getResolutionLimits } from './utils/resolutionHelper'
-import { IMetric } from './components/OverviewMetrics'
+import { DATABASE_OVERVIEW_REFRESH_INTERVAL, DATABASE_OVERVIEW_MINIMUM_REFRESH_INTERVAL } from 'uiSrc/constants/browser'
+import {
+  connectedInstanceOverviewSelector,
+  connectedInstanceSelector,
+  getDatabaseConfigInfoAction
+} from 'uiSrc/slices/instances/instances'
+import { ThemeContext } from 'uiSrc/contexts/themeContext'
+import { sendEventTelemetry, TelemetryEvent } from 'uiSrc/telemetry'
+import { toBytes, truncatePercentage } from 'uiSrc/utils'
+import { getOverviewMetrics, IMetric } from './components/OverviewMetrics'
 
+import AutoRefresh from '../auto-refresh'
 import styles from './styles.module.scss'
 
-interface Props {
-  windowDimensions: number
-  metrics?: Array<IMetric>
-  modules?: Array<AdditionalRedisModule>
-}
+const riConfig = getConfig()
 
-interface IState<T> {
-  visible: Array<T>
-  hidden: Array<T>
-}
-
-const DatabaseOverview = (props: Props) => {
-  const { metrics: metricsProps = [], modules: modulesProps = [], windowDimensions } = props
-  const [metrics, setMetrics] = useState<IState<IMetric>>({ visible: [], hidden: [] })
-  const [modules, setModules] = useState<AdditionalRedisModule[]>([])
-
-  useEffect(() => {
-    const resolutionLimits = getResolutionLimits(
-      windowDimensions,
-      metricsProps.filter((item) => item.value !== undefined)
+const getTooltipContent = (metric: IMetric) => {
+  if (!metric.children?.length) {
+    return (
+      <>
+        <span>{metric.tooltip.content}</span>
+        &nbsp;
+        <span>{metric.tooltip.title}</span>
+      </>
     )
-    const metricsState: IState<IMetric> = {
-      visible: [],
-      hidden: []
+  }
+  return metric.children
+    .filter((item) => item.value !== undefined)
+    .map((tooltipItem) => (
+      <EuiFlexGroup
+        className={styles.commandsPerSecTip}
+        key={tooltipItem.id}
+        gutterSize="none"
+        responsive={false}
+        alignItems="center"
+      >
+        {tooltipItem.icon && (
+          <EuiFlexItem grow={false}>
+            <EuiIcon
+              className={styles.moreInfoOverviewIcon}
+              size="m"
+              type={tooltipItem.icon}
+            />
+          </EuiFlexItem>
+        )}
+        <EuiFlexItem className={styles.moreInfoOverviewContent} grow={false}>
+          {tooltipItem.content}
+        </EuiFlexItem>
+        <EuiFlexItem className={styles.moreInfoOverviewTitle} grow={false}>
+          {tooltipItem.title}
+        </EuiFlexItem>
+      </EuiFlexGroup>
+    ))
+}
+
+const DatabaseOverview = () => {
+  const { theme } = useContext(ThemeContext)
+  const dispatch = useDispatch()
+  const [lastRefreshTime, setLastRefreshTime] = useState<number | null>(null)
+  const { id: connectedInstanceId = '', db } = useSelector(connectedInstanceSelector)
+
+  const overview = useSelector(connectedInstanceOverviewSelector)
+  const {
+    usedMemory,
+    cloudDetails: {
+      subscriptionType,
+      subscriptionId,
+      planMemoryLimit,
+      memoryLimitMeasurementUnit,
+      isBdbPackages,
+    } = {},
+  } = overview
+
+  const loadData = () => {
+    if (connectedInstanceId) {
+      dispatch(getDatabaseConfigInfoAction(connectedInstanceId))
+      setLastRefreshTime(Date.now())
     }
-    metricsProps?.forEach((item) => {
-      if (item.value !== undefined && item.groupId) {
-        return
-      }
-      if (item.value === undefined || metricsState.visible.length >= resolutionLimits.metrics) {
-        metricsState.hidden.push(item)
-      } else {
-        metricsState.visible.push(item)
+  }
+
+  const handleEnableAutoRefresh = (enableAutoRefresh: boolean, refreshRate: string) => {
+    sendEventTelemetry({
+      event: enableAutoRefresh
+        ? TelemetryEvent.OVERVIEW_AUTO_REFRESH_ENABLED
+        : TelemetryEvent.OVERVIEW_AUTO_REFRESH_DISABLED,
+      eventData: {
+        databaseId: connectedInstanceId,
+        refreshRate: +refreshRate
       }
     })
-    setMetrics(metricsState)
-
-    const sortedModules = sortModulesByName(modulesProps)
-    setModules(sortedModules)
-  }, [windowDimensions, metricsProps, modulesProps])
-
-  const getTooltipContent = (metric: IMetric) => {
-    if (!metric.children?.length) {
-      return (
-        <>
-          <span>{metric.tooltip.content}</span>
-          &nbsp;
-          <span>{metric.tooltip.title}</span>
-        </>
-      )
-    }
-    return metric.children
-      .filter((item) => item.value !== undefined)
-      .map((tooltipItem) => (
-        <EuiFlexGroup
-          className={styles.commandsPerSecTip}
-          key={tooltipItem.id}
-          gutterSize="none"
-          responsive={false}
-          alignItems="center"
-        >
-          {tooltipItem.icon && (
-            <EuiFlexItem grow={false}>
-              <EuiIcon
-                className={styles.moreInfoOverviewIcon}
-                size="m"
-                type={tooltipItem.icon}
-              />
-            </EuiFlexItem>
-          )}
-          <EuiFlexItem className={styles.moreInfoOverviewContent} grow={false}>
-            {tooltipItem.content}
-          </EuiFlexItem>
-          <EuiFlexItem className={styles.moreInfoOverviewTitle} grow={false}>
-            {tooltipItem.title}
-          </EuiFlexItem>
-        </EuiFlexGroup>
-      ))
   }
+
+  const usedMemoryPercent = planMemoryLimit
+    ? parseFloat(`${truncatePercentage(((usedMemory || 0) / toBytes(planMemoryLimit, memoryLimitMeasurementUnit || 'MB')) * 100, 1)}`)
+    : undefined
+
+  const metrics = useMemo(() => {
+    const overviewItems = {
+      ...overview,
+      usedMemoryPercent,
+    }
+    return getOverviewMetrics({ theme, items: overviewItems, db })
+  }, [theme, overview, db, usedMemoryPercent])
 
   return (
     <EuiFlexGroup className={styles.container} gutterSize="none" responsive={false}>
-      {metrics.visible?.length > 0 && (
+      {metrics?.length! > 0 && (
         <EuiFlexItem key="overview">
-          <div className={cx(
-            'flex-row',
-            styles.itemContainer,
-            styles.overview,
-          )}
+          <EuiFlexGroup
+            className={cx(
+              'flex-row',
+              styles.itemContainer,
+              styles.overview,
+            )}
+            gutterSize="none"
+            responsive={false}
+            alignItems="center"
           >
-            <EuiFlexGroup gutterSize="none" responsive={false}>
-              {
-                metrics.visible.map((overviewItem) => (
-                  <EuiFlexItem
-                    className={cx(styles.overviewItem, overviewItem.className ?? '')}
-                    key={overviewItem.id}
-                    data-test-subj={overviewItem.id}
-                    grow={false}
+            {subscriptionId && subscriptionType === 'fixed' && (
+              <EuiFlexItem
+                className={cx(styles.overviewItem, styles.upgradeBtnItem)}
+                grow={false}
+                style={{ borderRight: 'none' }}
+              >
+                <EuiButton
+                  color="secondary"
+                  fill={!!usedMemoryPercent && usedMemoryPercent >= 75}
+                  className={cx(styles.upgradeBtn)}
+                  style={{ fontWeight: '400' }}
+                  onClick={() => {
+                    const upgradeUrl = isBdbPackages
+                      ? `${riConfig.app.returnUrlBase}/databases/upgrade/${subscriptionId}`
+                      : `${riConfig.app.returnUrlBase}/subscription/${subscriptionId}/change-plan`
+                    window.open(upgradeUrl, '_blank')
+                  }}
+                  data-testid="upgrade-ri-db-button"
+                >
+                  Upgrade plan
+                </EuiButton>
+              </EuiFlexItem>
+            )}
+            {
+              metrics?.map((overviewItem) => (
+                <EuiFlexItem
+                  className={cx(styles.overviewItem, overviewItem.className ?? '')}
+                  key={overviewItem.id}
+                  data-test-subj={overviewItem.id}
+                  grow={false}
+                >
+                  <EuiToolTip
+                    position="bottom"
+                    className={styles.tooltip}
+                    content={getTooltipContent(overviewItem)}
                   >
-                    <EuiToolTip
-                      position="bottom"
-                      className={styles.tooltip}
-                      content={getTooltipContent(overviewItem)}
-                    >
-                      <EuiFlexGroup gutterSize="none" responsive={false} alignItems="center" justifyContent="center">
-                        {overviewItem.icon && (
-                          <EuiFlexItem grow={false}>
-                            <EuiIcon
-                              size="m"
-                              type={overviewItem.icon}
-                              className={styles.icon}
-                            />
-                          </EuiFlexItem>
-                        )}
-                        <EuiFlexItem grow={false} className={styles.overviewItemContent}>
-                          {overviewItem.content}
+                    <EuiFlexGroup gutterSize="none" responsive={false} alignItems="center" justifyContent="center">
+                      {overviewItem.icon && (
+                        <EuiFlexItem grow={false} className={styles.icon}>
+                          <EuiIcon
+                            size="m"
+                            type={overviewItem.icon}
+                            className={styles.icon}
+                          />
                         </EuiFlexItem>
-                      </EuiFlexGroup>
-                    </EuiToolTip>
-                  </EuiFlexItem>
-                ))
-              }
-            </EuiFlexGroup>
-          </div>
+                      )}
+                      <EuiFlexItem grow={false} className={styles.overviewItemContent}>
+                        {overviewItem.content}
+                      </EuiFlexItem>
+                    </EuiFlexGroup>
+                  </EuiToolTip>
+                </EuiFlexItem>
+              ))
+            }
+            <EuiFlexItem
+              className={cx(styles.overviewItem, styles.autoRefresh)}
+              grow={false}
+              data-testid="overview-auto-refresh"
+            >
+              <EuiFlexItem grow={false} className={styles.overviewItemContent}>
+                <AutoRefresh
+                  displayText={false}
+                  displayLastRefresh={false}
+                  iconSize="xs"
+                  loading={false}
+                  enableAutoRefreshDefault
+                  lastRefreshTime={lastRefreshTime}
+                  containerClassName=""
+                  postfix="overview"
+                  testid="auto-refresh-overview"
+                  defaultRefreshRate={DATABASE_OVERVIEW_REFRESH_INTERVAL}
+                  minimumRefreshRate={parseInt(DATABASE_OVERVIEW_MINIMUM_REFRESH_INTERVAL)}
+                  onRefresh={loadData}
+                  onEnableAutoRefresh={handleEnableAutoRefresh}
+                />
+              </EuiFlexItem>
+            </EuiFlexItem>
+          </EuiFlexGroup>
         </EuiFlexItem>
       )}
-      <EuiFlexItem grow={false} style={{ flexShrink: 0 }}>
-        <div
-          className={cx(
-            'flex-row',
-            styles.itemContainer,
-            styles.modules,
-          )}
-        >
-          <MoreInfoPopover
-            metrics={metrics.hidden}
-            modules={modules}
-          />
-        </div>
-      </EuiFlexItem>
     </EuiFlexGroup>
   )
 }

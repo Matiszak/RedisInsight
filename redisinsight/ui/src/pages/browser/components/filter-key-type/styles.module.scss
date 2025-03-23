@@ -17,7 +17,9 @@
         border-right: 0 !important;
         padding: 0 25px 0 6px !important;
 
-        &.euiSuperSelect--isOpen__button, &:focus, &:not(:disabled):hover   {
+        &.euiSuperSelect--isOpen__button,
+        &:focus,
+        &:not(:disabled):hover {
           background-color: var(--euiColorEmptyShade) !important;
         }
       }
@@ -42,6 +44,12 @@
   }
 }
 
+@include global.insights-open {
+  .container {
+    width: 128px;
+  }
+}
+
 .filterKeyType {
   position: relative;
   height: 30px;
@@ -49,7 +57,8 @@
   padding: 4px !important;
   background-color: var(--euiColorEmptyShade);
 
-  &:hover, &:focus {
+  &:hover,
+  &:focus {
     background-color: var(--hoverInListColorDarken) !important;
   }
 
@@ -112,7 +121,7 @@
     }
   }
 
-  .modalBody :global(.euiModalBody__overflow){
+  .modalBody :global(.euiModalBody__overflow) {
     padding: 0 !important;
   }
 }

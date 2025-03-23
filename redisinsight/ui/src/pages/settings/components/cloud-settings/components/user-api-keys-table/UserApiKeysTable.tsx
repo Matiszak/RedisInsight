@@ -1,17 +1,17 @@
 import React, { useCallback, useState } from 'react'
 import {
   EuiBasicTableColumn,
+  EuiButton,
+  EuiButtonEmpty,
   EuiButtonIcon,
   EuiIcon,
   EuiInMemoryTable,
   EuiLink,
+  EuiSpacer,
   EuiText,
   EuiTitle,
   EuiToolTip,
-  PropertySort,
-  EuiSpacer,
-  EuiButton,
-  EuiButtonEmpty
+  PropertySort
 } from '@elastic/eui'
 import { format } from 'date-fns'
 import cx from 'classnames'
@@ -20,11 +20,11 @@ import { isNull } from 'lodash'
 import { formatLongName, Maybe, Nullable } from 'uiSrc/utils'
 import PopoverDelete from 'uiSrc/pages/browser/components/popover-delete/PopoverDelete'
 import { sendEventTelemetry, TelemetryEvent } from 'uiSrc/telemetry'
-import { OAuthSocialHandlerDialog, OAuthSsoHandlerDialog } from 'uiSrc/components'
-import { CloudCapiKey, OAuthSocialSource } from 'uiSrc/slices/interfaces'
+import { OAuthSsoHandlerDialog } from 'uiSrc/components'
+import { CloudCapiKey, OAuthSocialAction, OAuthSocialSource } from 'uiSrc/slices/interfaces'
 import { removeCapiKeyAction } from 'uiSrc/slices/oauth/cloud'
 
-import { ReactComponent as CloudStars } from 'uiSrc/assets/img/oauth/stars.svg'
+import CloudStars from 'uiSrc/assets/img/oauth/stars.svg?react'
 
 import styles from './styles.module.scss'
 
@@ -97,7 +97,7 @@ const UserApiKeysTable = ({ items, loading }: Props) => {
           <div className={styles.nameField}>
             {!valid && (
               <EuiToolTip
-                content="This API key is invalid. Remove it from RedisInsight and Redis Cloud and create a new one instead."
+                content="This API key is invalid. Remove it from   and Redis Cloud and create a new one instead."
                 anchorClassName={styles.invalidIconAnchor}
               >
                 <EuiIcon className={styles.invalidIcon} type="alert" color="danger" />
@@ -162,7 +162,7 @@ const UserApiKeysTable = ({ items, loading }: Props) => {
             />
           </EuiToolTip>
           <PopoverDelete
-            header={(<>{formatLongName(name)} <br /> will be removed from RedisInsight.</>)}
+            header={(<>{formatLongName(name)} <br /> will be removed from Redis Insight.</>)}
             text={(
               <>
                 {'To delete this API key from Redis Cloud, '}
@@ -171,7 +171,7 @@ const UserApiKeysTable = ({ items, loading }: Props) => {
                   color="text"
                   external={false}
                   tabIndex={-1}
-                  href="https://redis.com/redis-enterprise-cloud/overview/?utm_source=redisinsight&utm_medium=settings&utm_campaign=clear_keys"
+                  href="https://redis.io/redis-enterprise-cloud/overview/?utm_source=redisinsight&utm_medium=settings&utm_campaign=clear_keys"
                 >
                   sign in to Redis Cloud
                 </EuiLink>
@@ -208,30 +208,36 @@ const UserApiKeysTable = ({ items, loading }: Props) => {
           <EuiSpacer size="s" />
           <EuiText size="s" className={styles.smallText} color="subdued">
             Cloud API keys will be created and stored when you connect to Redis Cloud to create
-            a free Cloud database or autodiscover your Cloud database.
+            a free trial Cloud database or autodiscover your Cloud database.
           </EuiText>
           <EuiSpacer />
           <div className={styles.actions}>
-            <OAuthSocialHandlerDialog>
+            <OAuthSsoHandlerDialog>
               {(socialCloudHandlerClick) => (
                 <EuiButtonEmpty
                   size="s"
-                  color="text"
+                  color="ghost"
                   className={styles.autodiscoverBtn}
-                  onClick={(e: React.MouseEvent) => socialCloudHandlerClick(e, OAuthSocialSource.SettingsPage)}
+                  onClick={(e: React.MouseEvent) => socialCloudHandlerClick(e, {
+                    source: OAuthSocialSource.SettingsPage,
+                    action: OAuthSocialAction.Import
+                  })}
                   data-testid="autodiscover-btn"
                 >
                   Autodiscover
                 </EuiButtonEmpty>
               )}
-            </OAuthSocialHandlerDialog>
+            </OAuthSsoHandlerDialog>
             <OAuthSsoHandlerDialog>
               {(ssoCloudHandlerClick) => (
                 <EuiButton
                   fill
                   size="s"
                   color="secondary"
-                  onClick={(e: React.MouseEvent) => ssoCloudHandlerClick(e, OAuthSocialSource.SettingsPage)}
+                  onClick={(e: React.MouseEvent) => ssoCloudHandlerClick(e, {
+                    source: OAuthSocialSource.SettingsPage,
+                    action: OAuthSocialAction.Create
+                  })}
                   data-testid="create-cloud-db-btn"
                 >
                   Create Redis Cloud database

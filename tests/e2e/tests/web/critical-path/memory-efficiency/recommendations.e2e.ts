@@ -1,8 +1,9 @@
 import { MyRedisDatabasePage, MemoryEfficiencyPage, BrowserPage, WorkbenchPage } from '../../../../pageObjects';
-import { RecommendationIds, rte } from '../../../../helpers/constants';
+import { ExploreTabs, RecommendationIds, rte } from '../../../../helpers/constants';
 import { DatabaseHelper } from '../../../../helpers/database';
 import {
     commonUrl,
+    ossSentinelConfig,
     ossStandaloneBigConfig,
     ossStandaloneConfig,
     ossStandaloneV5Config
@@ -11,6 +12,7 @@ import { DatabaseAPIRequests } from '../../../../helpers/api/api-database';
 import { RecommendationsActions } from '../../../../common-actions/recommendations-actions';
 import { Common } from '../../../../helpers/common';
 import { APIKeyRequests } from '../../../../helpers/api/api-keys';
+import { Telemetry } from '../../../../helpers';
 
 const memoryEfficiencyPage = new MemoryEfficiencyPage();
 const myRedisDatabasePage = new MyRedisDatabasePage();
@@ -20,6 +22,16 @@ const workbenchPage = new WorkbenchPage();
 const databaseHelper = new DatabaseHelper();
 const databaseAPIRequests = new DatabaseAPIRequests();
 const apiKeyRequests = new APIKeyRequests();
+const telemetry = new Telemetry();
+
+const logger = telemetry.createLogger();
+
+const telemetryEvent = 'DATABASE_ANALYSIS_TIPS_COLLAPSED';
+const expectedProperties = [
+    'databaseId',
+    'provider',
+    'recommendation'
+];
 
 // const externalPageLink = 'https://docs.redis.com/latest/ri/memory-optimizations/';
 let keyName = `recomKey-${Common.generateWord(10)}`;
@@ -31,7 +43,7 @@ const avoidLogicalDbRecommendation = RecommendationIds.avoidLogicalDatabases;
 const redisVersionRecommendation = RecommendationIds.redisVersion;
 const searchJsonRecommendation = RecommendationIds.searchJson;
 
-fixture `Memory Efficiency Recommendations`
+fixture(`Memory Efficiency Recommendations`)
     .meta({ type: 'critical_path', rte: rte.standalone })
     .page(commonUrl)
     .beforeEach(async t => {
@@ -39,12 +51,13 @@ fixture `Memory Efficiency Recommendations`
         // Go to Analysis Tools page
         await t.click(myRedisDatabasePage.NavigationPanel.analysisPageButton);
     })
-    .afterEach(async t => {
+    .afterEach(async() => {
         // Clear and delete database
         await apiKeyRequests.deleteKeyByNameApi(keyName, ossStandaloneConfig.databaseName);
         await databaseAPIRequests.deleteStandaloneDatabaseApi(ossStandaloneConfig);
     });
 test
+    .requestHooks(logger)
     .before(async t => {
         await databaseHelper.acceptLicenseTermsAndAddDatabaseApi(ossStandaloneBigConfig);
         // Go to Analysis Tools page
@@ -81,6 +94,10 @@ test
         // Verify that user can expand/collapse recommendation
         const expandedTextContaiterSize = await memoryEfficiencyPage.getRecommendationByName(luaScriptRecommendation).offsetHeight;
         await t.click(memoryEfficiencyPage.getRecommendationButtonByName(luaScriptRecommendation));
+
+        //Verify telemetry event
+        await telemetry.verifyEventHasProperties(telemetryEvent, expectedProperties, logger);
+
         await t.expect(memoryEfficiencyPage.getRecommendationByName(luaScriptRecommendation).offsetHeight)
             .lt(expandedTextContaiterSize, 'Lua script recommendation not collapsed');
         await t.click(memoryEfficiencyPage.getRecommendationButtonByName(luaScriptRecommendation));
@@ -90,11 +107,13 @@ test
 // skipped due to inability to receive no recommendations for now
 test.skip('No recommendations message', async t => {
     keyName = `recomKey-${Common.generateWord(10)}`;
-    const noRecommendationsMessage = 'No recommendations at the moment, run a new report later to keep up the good work!';
+    const noRecommendationsMessage = 'No Tips at the moment,keep up the good work!';
     const command = `HSET ${keyName} field value`;
 
     // Create Hash key and create report
     await browserPage.Cli.sendCommandInCli(command);
+    // Go to Analysis Tools page
+    await t.click(myRedisDatabasePage.NavigationPanel.analysisPageButton);
     await t.click(memoryEfficiencyPage.newReportBtn);
     // Go to Recommendations tab
     await t.click(memoryEfficiencyPage.recommendationsTab);
@@ -107,7 +126,7 @@ test
         keyName = `recomKey-${Common.generateWord(10)}`;
         await browserPage.addStringKey(stringKeyName, '2147476121', 'field');
         await t.click(myRedisDatabasePage.NavigationPanel.myRedisDBButton);
-        await myRedisDatabasePage.AddRedisDatabase.addLogicalRedisDatabase(ossStandaloneConfig, index);
+        await myRedisDatabasePage.AddRedisDatabaseDialog.addLogicalRedisDatabase(ossStandaloneConfig, index);
         await myRedisDatabasePage.clickOnDBByName(`${ossStandaloneConfig.databaseName} [db${index}]`);
         await browserPage.addHashKey(keyName, '2147476121', 'field', 'value');
     })
@@ -159,7 +178,7 @@ test
         await recommendationsActions.voteForRecommendation(redisVersionRecommendation, usefulVoteOption);
         await recommendationsActions.verifyVoteIsSelected(redisVersionRecommendation, usefulVoteOption);
     });
-test.skip
+test
     .before(async t => {
         await databaseHelper.acceptLicenseTermsAndAddDatabaseApi(ossStandaloneConfig);
         keyName = `recomKey-${Common.generateWord(10)}`;
@@ -174,7 +193,7 @@ test.skip
         // Go to Recommendations tab
         await t.click(memoryEfficiencyPage.recommendationsTab);
     })
-    .after(async t => {
+    .after(async() => {
         // Clear and delete database
         await apiKeyRequests.deleteKeyByNameApi(keyName, ossStandaloneConfig.databaseName);
         await databaseAPIRequests.deleteStandaloneDatabaseApi(ossStandaloneConfig);
@@ -189,7 +208,9 @@ test.skip
         await t.expect(recommendation.exists).ok('Query and search JSON documents recommendation not displayed');
         // Verify that tutorial opened
         await t.click(memoryEfficiencyPage.getToTutorialBtnByRecomName(searchJsonRecommendation));
-        await t.expect(workbenchPage.preselectArea.visible).ok('Workbench Enablement area not opened');
+        await workbenchPage.NavigationHeader.togglePanel(true);
+        const tutorial = await workbenchPage.InsightsPanel.setActiveTab(ExploreTabs.Tutorials);
+        await t.expect(tutorial.preselectArea.visible).ok('Workbench Enablement area not opened');
         // Verify that REDIS FOR TIME SERIES tutorial expanded
-        await t.expect(workbenchPage.getTutorialByName('INTRODUCTION').visible).ok('INTRODUCTION tutorial is not expanded');
+        await t.expect(tutorial.getTutorialByName('INTRODUCTION').visible).ok('INTRODUCTION tutorial is not expanded');
     });

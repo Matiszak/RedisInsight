@@ -12,6 +12,7 @@ import {
   requirements, serverConfig
 } from '../deps';
 import { ServerService } from 'src/modules/server/server.service';
+import { convertArrayReplyToObject } from 'src/modules/redis/utils';
 const { server, request, constants, rte, analytics } = deps;
 
 // endpoint to test
@@ -292,7 +293,7 @@ describe('POST /databases/:instanceId/cli/:uuid/send-command', () => {
             expect(await rte.client.exists(constants.TEST_HASH_KEY_1)).to.eql(0);
           },
           after: async () => {
-            expect(await rte.client.hgetall(constants.TEST_HASH_KEY_1)).to.deep.eql({
+            expect(convertArrayReplyToObject(await rte.client.hgetall(constants.TEST_HASH_KEY_1))).to.deep.eql({
               [constants.TEST_HASH_FIELD_1_NAME]: constants.TEST_HASH_FIELD_1_VALUE,
             });
           },
@@ -792,7 +793,7 @@ describe('POST /databases/:instanceId/cli/:uuid/send-command', () => {
           responseSchema,
           checkFn: ({ body }) => {
             expect(body.status).to.eql('fail');
-            expect(body.response).to.include('command is not supported by the RedisInsight CLI');
+            expect(body.response).to.include('command is not supported by the Redis Insight CLI');
           }
         },
         {
@@ -803,7 +804,7 @@ describe('POST /databases/:instanceId/cli/:uuid/send-command', () => {
           responseSchema,
           checkFn: ({ body }) => {
             expect(body.status).to.eql('fail');
-            expect(body.response).to.include('command is not supported by the RedisInsight CLI');
+            expect(body.response).to.include('command is not supported by the Redis Insight CLI');
           }
         },
         {
@@ -814,7 +815,7 @@ describe('POST /databases/:instanceId/cli/:uuid/send-command', () => {
           responseSchema,
           checkFn: ({ body }) => {
             expect(body.status).to.eql('fail');
-            expect(body.response).to.include('command is not supported by the RedisInsight CLI');
+            expect(body.response).to.include('command is not supported by the Redis Insight CLI');
           }
         },
         {
@@ -825,7 +826,7 @@ describe('POST /databases/:instanceId/cli/:uuid/send-command', () => {
           responseSchema,
           checkFn: ({ body }) => {
             expect(body.status).to.eql('fail');
-            expect(body.response).to.include('command is not supported by the RedisInsight CLI');
+            expect(body.response).to.include('command is not supported by the Redis Insight CLI');
           }
         },
         {
@@ -836,7 +837,7 @@ describe('POST /databases/:instanceId/cli/:uuid/send-command', () => {
           responseSchema,
           checkFn: ({ body }) => {
             expect(body.status).to.eql('fail');
-            expect(body.response).to.include('command is not supported by the RedisInsight CLI');
+            expect(body.response).to.include('command is not supported by the Redis Insight CLI');
           }
         },
         {
@@ -847,7 +848,7 @@ describe('POST /databases/:instanceId/cli/:uuid/send-command', () => {
           responseSchema,
           checkFn: ({ body }) => {
             expect(body.status).to.eql('fail');
-            expect(body.response).to.include('command is not supported by the RedisInsight CLI');
+            expect(body.response).to.include('command is not supported by the Redis Insight CLI');
           }
         },
         {
@@ -858,7 +859,7 @@ describe('POST /databases/:instanceId/cli/:uuid/send-command', () => {
           responseSchema,
           checkFn: ({ body }) => {
             expect(body.status).to.eql('fail');
-            expect(body.response).to.include('command is not supported by the RedisInsight CLI');
+            expect(body.response).to.include('command is not supported by the Redis Insight CLI');
           }
         },
       ].map(mainCheckFn);
@@ -904,12 +905,7 @@ describe('POST /databases/:instanceId/cli/:uuid/send-command', () => {
             command: `blpop ${constants.TEST_LIST_KEY_2} 0`,
             outputFormat: 'TEXT',
           },
-          statusCode: 500, // todo: is it as designed?
-          responseBody: {
-            statusCode: 500,
-            message: 'Connection is closed.',
-            error: 'Internal Server Error',
-          },
+          responseSchema,
           before: async function () {
             // unblock command after 1 sec
             setTimeout(async () => {
@@ -1008,14 +1004,20 @@ describe('POST /databases/:instanceId/cli/:uuid/send-command', () => {
           await rte.client.del(constants.TEST_HASH_KEY_1)
         },
         checkFn: ({ body }) => {
-          expect(body.response).to.be.an('object');
-          expect(body.response).to.deep.eql({[constants.TEST_HASH_FIELD_1_NAME]: constants.TEST_HASH_FIELD_1_VALUE});
+          expect([
+            // TODO: investigate the difference between getting a hash
+            // result from ioredis
+            {[constants.TEST_HASH_FIELD_1_NAME]: constants.TEST_HASH_FIELD_1_VALUE},
+            // result from node-redis
+            [constants.TEST_HASH_FIELD_1_NAME, constants.TEST_HASH_FIELD_1_VALUE]
+          ]).to.deep.contain(body.response)
         }
       },
     ].map(mainCheckFn);
   })
 
-  describe('Client', () => {
+  // Skip 'Cluster' tests because tested functionalities were removed
+  xdescribe('Client', () => {
     [
       {
         name: 'Should throw ClientNotFoundError',
@@ -1090,10 +1092,13 @@ describe('POST /databases/:instanceId/cli/:uuid/send-command (MULTI)', () => {
         },
         responseRawSchema,
         checkFn: ({ body }) => {
-          expect(body.response).to.deep.eq([
-            'OK',
-            'ReplyError: ERR value is not an integer or out of range',
-          ]);
+          expect([
+            // TODO: investigate the difference between errors
+            // result from ioredis
+            ['OK', 'ReplyError: ERR value is not an integer or out of range'],
+            // result from node-redis
+            ['OK', 'Error: ERR value is not an integer or out of range'],
+          ]).to.deep.contain(body.response)
         },
       },
     ].map(mainCheckFn);

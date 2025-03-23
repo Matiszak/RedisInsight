@@ -1,5 +1,6 @@
 import { Module, Type } from '@nestjs/common';
 import { FeatureController } from 'src/modules/feature/feature.controller';
+import { LocalFeatureService } from 'src/modules/feature/local.feature.service';
 import { FeatureService } from 'src/modules/feature/feature.service';
 import { NotificationModule } from 'src/modules/notification/notification.module';
 import { FeaturesConfigRepository } from 'src/modules/feature/repositories/features-config.repository';
@@ -10,22 +11,27 @@ import { LocalFeatureRepository } from 'src/modules/feature/repositories/local.f
 import { FeatureFlagProvider } from 'src/modules/feature/providers/feature-flag/feature-flag.provider';
 import { FeatureGateway } from 'src/modules/feature/feature.gateway';
 import { FeatureAnalytics } from 'src/modules/feature/feature.analytics';
+import { LocalFeaturesConfigService } from 'src/modules/feature/local.features-config.service';
 
 @Module({})
 export class FeatureModule {
   static register(
     featureRepository: Type<FeatureRepository> = LocalFeatureRepository,
     featuresConfigRepository: Type<FeaturesConfigRepository> = LocalFeaturesConfigRepository,
+    featureService: Type<FeatureService> = LocalFeatureService,
+    featuresConfigService: Type<FeaturesConfigService> = LocalFeaturesConfigService,
   ) {
     return {
       module: FeatureModule,
       controllers: [FeatureController],
       providers: [
-        FeatureService,
-        FeaturesConfigService,
         FeatureFlagProvider,
         FeatureGateway,
         FeatureAnalytics,
+        {
+          provide: FeatureService,
+          useClass: featureService,
+        },
         {
           provide: FeatureRepository,
           useClass: featureRepository,
@@ -33,6 +39,10 @@ export class FeatureModule {
         {
           provide: FeaturesConfigRepository,
           useClass: featuresConfigRepository,
+        },
+        {
+          provide: FeaturesConfigService,
+          useClass: featuresConfigService,
         },
       ],
       exports: [

@@ -13,6 +13,7 @@ export class MemoryEfficiencyPage extends InstancePage {
     cssReadMoreLink = '[data-testid=read-more-link]';
     cssKeyName = '[data-testid=recommendation-key-name]';
     // BUTTONS
+    databaseAnalysisTab = Selector('[data-testid=analytics-tab-DatabaseAnalysis]');
     newReportBtn = Selector('[data-testid=start-database-analysis-btn]');
     expandArrowBtn = Selector('[data-testid^=expand-arrow-]');
     sortByKeyPattern = Selector('[data-testid=tableHeaderSortButton]');
@@ -21,6 +22,10 @@ export class MemoryEfficiencyPage extends InstancePage {
     selectedReport = Selector('[data-testid=select-report]');
     sortByLength = Selector('[data-testid=btn-change-table-keys]');
     recommendationsTab = Selector('[data-testid=Recommendations-tab]');
+    veryUsefulVoteBtn = Selector('[data-testid=very-useful-vote-btn]').nth(0);
+    usefulVoteBtn = Selector('[data-testid=useful-vote-btn]').nth(0);
+    notUsefulVoteBtn = Selector('[data-testid=not-useful-vote-btn]').nth(0);
+    recommendationsFeedbackBtn = Selector('[data-testid=recommendation-feedback-btn]');
     // ICONS
     reportTooltipIcon = Selector('[data-testid=db-new-reports-icon]');
     // TEXT ELEMENTS
@@ -54,11 +59,9 @@ export class MemoryEfficiencyPage extends InstancePage {
     // LINKS
     treeViewLink = Selector('[data-testid=tree-view-page-link]');
     readMoreLink = Selector('[data-testid=read-more-link]');
+    workbenchLink = Selector('[data-test-subj=workbench-page-btn]');
     // CONTAINERS
-    veryUsefulVoteBtn = Selector('[data-testid=very-useful-vote-btn]').nth(0);
-    usefulVoteBtn = Selector('[data-testid=useful-vote-btn]').nth(0);
-    notUsefulVoteBtn = Selector('[data-testid=not-useful-vote-btn]').nth(0);
-    recommendationsFeedbackBtn = Selector('[data-testid=recommendation-feedback-btn]');
+    analysisPage = Selector('[data-testid=database-analysis-page]');
 
     /**
      * Get recommendation selector by name

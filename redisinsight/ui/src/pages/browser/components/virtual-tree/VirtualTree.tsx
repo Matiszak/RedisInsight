@@ -6,19 +6,20 @@ import {
   TreeWalkerValue,
   FixedSizeTree as Tree,
 } from 'react-vtree'
-import { EuiIcon, EuiLoadingSpinner, EuiProgress } from '@elastic/eui'
-import { useDispatch } from 'react-redux'
+import { EuiIcon, EuiImage, EuiLoadingSpinner, EuiProgress } from '@elastic/eui'
+import { useDispatch, useSelector } from 'react-redux'
 
 import { bufferToString, Maybe, Nullable } from 'uiSrc/utils'
 import { useDisposableWebworker } from 'uiSrc/services'
 import { IKeyPropTypes } from 'uiSrc/constants/prop-types/keys'
 import { ThemeContext } from 'uiSrc/contexts/themeContext'
-import { DEFAULT_DELIMITER, DEFAULT_TREE_SORTING, KeyTypes, ModulesKeyTypes, SortOrder, Theme } from 'uiSrc/constants'
+import { DEFAULT_TREE_SORTING, KeyTypes, ModulesKeyTypes, SortOrder, Theme } from 'uiSrc/constants'
 import KeyLightSVG from 'uiSrc/assets/img/sidebar/browser.svg'
 import KeyDarkSVG from 'uiSrc/assets/img/sidebar/browser_active.svg'
 import { RedisResponseBuffer, RedisString } from 'uiSrc/slices/interfaces'
 import { fetchKeysMetadataTree } from 'uiSrc/slices/browser/keys'
-import { GetKeyInfoResponse } from 'apiSrc/modules/browser/dto'
+import { appContextDbConfig } from 'uiSrc/slices/app/context'
+import { GetKeyInfoResponse } from 'apiSrc/modules/browser/keys/dto'
 
 import { Node } from './components/Node'
 import { NodeMeta, TreeData, TreeNode } from './interfaces'
@@ -27,7 +28,8 @@ import styles from './styles.module.scss'
 
 export interface Props {
   items: IKeyPropTypes[]
-  delimiter?: string
+  delimiterPattern: string
+  delimiters: string[]
   loadingIcon?: string
   loading: boolean
   deleting: boolean
@@ -52,7 +54,8 @@ export const KEYS = 'keys'
 const VirtualTree = (props: Props) => {
   const {
     items,
-    delimiter = DEFAULT_DELIMITER,
+    delimiterPattern,
+    delimiters,
     loadingIcon = 'empty',
     statusOpen = {},
     statusSelected,
@@ -63,7 +66,7 @@ const VirtualTree = (props: Props) => {
     onStatusOpen,
     onStatusSelected,
     setConstructingTree,
-    webworkerFn = () => {},
+    webworkerFn = () => { },
     onDeleteClicked,
     onDeleteLeaf,
   } = props
@@ -94,6 +97,8 @@ const VirtualTree = (props: Props) => {
     nodes.current = result
     rerender({})
     setConstructingTree?.(false)
+
+    openSingleFolderNode(nodes.current)
   }, [result])
 
   useEffect(() => {
@@ -101,13 +106,13 @@ const VirtualTree = (props: Props) => {
       nodes.current = []
       elements.current = {}
       rerender({})
-      runWebworker?.({ items: [], delimiter, sorting })
+      runWebworker?.({ items: [], delimiterPattern, delimiters, sorting })
       return
     }
 
     setConstructingTree(true)
-    runWebworker?.({ items, delimiter, sorting })
-  }, [items, delimiter])
+    runWebworker?.({ items, delimiterPattern, delimiters, sorting })
+  }, [items, delimiterPattern])
 
   const handleUpdateSelected = useCallback((name: RedisString) => {
     onStatusSelected?.(name)
@@ -134,40 +139,41 @@ const VirtualTree = (props: Props) => {
   }), [])
 
   const getMetadata = useCallback((
-    itemsInit: any[] = []
+    itemsInit: any[] = [],
+    filter: Nullable<KeyTypes>
   ): void => {
     dispatch(fetchKeysMetadataTree(
       itemsInit,
-      commonFilterType,
+      filter,
       controller.current?.signal,
       (loadedItems) =>
         onSuccessFetchedMetadata(loadedItems),
       () => { rerender({}) }
     ))
-  }, [commonFilterType])
+  }, [])
 
   const onSuccessFetchedMetadata = (
     loadedItems: any[],
   ) => {
     const items = loadedItems.map(formatItem)
 
-    items.forEach((item) => updateNodeByPath(item.path, item))
+    items.forEach((item: any) => updateNodeByPath(item.path, item))
 
     rerender({})
   }
 
-  const getMetadataDebounced = debounce(() => {
+  const getMetadataDebounced = debounce((filter: Nullable<KeyTypes>) => {
     const entries = Object.entries(elements.current)
 
-    getMetadata(entries)
+    getMetadata(entries, filter)
 
     elements.current = {}
   }, 100)
 
   const getMetadataNode = useCallback((nameBuffer: any, path: string) => {
     elements.current[path] = nameBuffer
-    getMetadataDebounced()
-  }, [])
+    getMetadataDebounced(commonFilterType)
+  }, [commonFilterType])
 
   // This helper function constructs the object that will be sent back at the step
   // [2] during the treeWalker function work. Except for the mandatory `data`
@@ -187,7 +193,8 @@ const VirtualTree = (props: Props) => {
       size: node.size,
       type: node.type,
       fullName: node.fullName,
-      shortName: node.nameString?.split(delimiter).pop(),
+      shortName: node.nameString?.split(new RegExp(delimiterPattern, 'g')).pop(),
+      delimiters,
       nestingLevel,
       deleting,
       path: node.path,
@@ -204,6 +211,15 @@ const VirtualTree = (props: Props) => {
     nestingLevel,
     node,
   })
+
+  const openSingleFolderNode = useCallback((treeNodes?: TreeNode[]) => {
+    let nodes = treeNodes
+    while (nodes?.length === 1) {
+      const singleNode = nodes[0]
+      onStatusOpen?.(singleNode.fullName, true)
+      nodes = singleNode.children
+    }
+  }, [onStatusOpen])
 
   // The `treeWalker` function runs only on tree re-build which is performed
   // whenever the `treeWalker` prop is changed.
@@ -236,7 +252,7 @@ const VirtualTree = (props: Props) => {
     <AutoSizer>
       {({ height, width }) => (
         <div data-testid="virtual-tree" style={{ position: 'relative' }}>
-          { nodes.current.length > 0 && (
+          {nodes.current.length > 0 && (
             <>
               {loading && (
                 <EuiProgress
@@ -260,11 +276,19 @@ const VirtualTree = (props: Props) => {
               </Tree>
             </>
           )}
-          { nodes.current.length === 0 && loading && (
+          {nodes.current.length === 0 && loading && (
             <div className={styles.loadingContainer} style={{ width, height }} data-testid="virtual-tree-spinner">
               <div className={styles.loadingBody}>
                 <EuiLoadingSpinner size="xl" className={styles.loadingSpinner} />
-                <EuiIcon type={loadingIcon || 'empty'} className={styles.loadingIcon} />
+                {loadingIcon ? (
+                  <EuiImage
+                    className={styles.loadingIcon}
+                    src={loadingIcon}
+                    alt="loading"
+                  />
+                ) : (
+                  <EuiIcon type="empty" className={styles.loadingIcon} />
+                )}
               </div>
             </div>
           )}

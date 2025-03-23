@@ -1,45 +1,22 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { when } from 'jest-when';
-import { IRedisClusterNodeAddress, ReplyError } from 'src/models';
 import {
   mockFeatureService,
-  mockIOClusterNode1,
-  mockIOClusterNode2,
-  mockIORedisClient,
-  mockIORedisCluster,
   mockRedisClientList,
   mockRedisClientListResult,
   mockRedisClientsInfoResponse,
-  mockRedisClusterFailInfoResponse,
-  mockRedisClusterNodesResponse,
-  mockRedisClusterOkInfoResponse,
-  mockRedisNoPermError,
-  mockRedisSentinelMasterResponse,
   mockRedisServerInfoResponse,
-  mockSentinelMasterDto,
-  mockSentinelMasterEndpoint,
-  mockSentinelMasterInDownState,
-  mockSentinelMasterInOkState,
-  mockStandaloneRedisInfoReply, MockType,
+  mockStandaloneRedisInfoReply,
+  MockType,
+  mockStandaloneRedisClient,
+  mockClusterRedisClient,
 } from 'src/__mocks__';
 import { REDIS_MODULES_COMMANDS, AdditionalRedisModuleName } from 'src/constants';
-import { DatabaseInfoProvider } from 'src/modules/database/providers/database-info.provider';
 import { RedisDatabaseInfoResponse } from 'src/modules/database/dto/redis-info.dto';
-import { BadRequestException, ForbiddenException, InternalServerErrorException } from '@nestjs/common';
-import { SentinelMasterStatus } from 'src/modules/redis-sentinel/models/sentinel-master';
-import ERROR_MESSAGES from 'src/constants/error-messages';
+import { ForbiddenException, InternalServerErrorException } from '@nestjs/common';
 import { FeatureService } from 'src/modules/feature/feature.service';
-
-const mockClusterNodeAddresses: IRedisClusterNodeAddress[] = [
-  {
-    host: '127.0.0.1',
-    port: 30004,
-  },
-  {
-    host: '127.0.0.1',
-    port: 30001,
-  },
-];
+import { DatabaseInfoProvider } from 'src/modules/database/providers/database-info.provider';
+import { convertRedisInfoReplyToObject } from 'src/utils';
 
 const mockRedisServerInfoDto = {
   redis_version: '6.0.5',
@@ -75,12 +52,9 @@ const mockRedisModuleList = [
 
 const mockUnknownCommandModule = new Error("unknown command 'module'");
 
-const mockSentinelConnectionOptions = {
-  host: '127.0.0.1',
-  port: 26379,
-};
-
 describe('DatabaseInfoProvider', () => {
+  const standaloneClient = mockStandaloneRedisClient;
+  const clusterClient = mockClusterRedisClient;
   let service: DatabaseInfoProvider;
   let featureService: MockType<FeatureService>;
 
@@ -100,122 +74,31 @@ describe('DatabaseInfoProvider', () => {
     featureService = await module.get(FeatureService);
   });
 
-  describe('isCluster', () => {
-    it('cluster connection ok', async () => {
-      when(mockIORedisClient.cluster)
-        .calledWith('INFO')
-        .mockResolvedValue(mockRedisClusterOkInfoResponse);
-
-      const result = await service.isCluster(mockIORedisClient);
-
-      expect(result).toEqual(true);
-    });
-
-    it('cluster connection false', async () => {
-      when(mockIORedisClient.cluster)
-        .calledWith('INFO')
-        .mockResolvedValue(mockRedisClusterFailInfoResponse);
-
-      const result = await service.isCluster(mockIORedisClient);
-
-      expect(result).toEqual(false);
-    });
-    it('cluster not supported', async () => {
-      const replyError: ReplyError = {
-        name: 'ReplyError',
-        message: 'ERR This instance has cluster support disabled',
-        command: 'CLUSTER',
-      };
-      when(mockIORedisClient.cluster)
-        .calledWith('INFO')
-        .mockRejectedValue(replyError);
-
-      const result = await service.isCluster(mockIORedisClient);
-
-      expect(result).toEqual(false);
-    });
-  });
-
-  describe('isSentinel', () => {
-    it('sentinel connection ok', async () => {
-      when(mockIORedisClient.call)
-        .calledWith('sentinel', ['masters'])
-        .mockResolvedValue(mockRedisSentinelMasterResponse);
-
-      const result = await service.isSentinel(mockIORedisClient);
-
-      expect(result).toEqual(true);
-    });
-    it('sentinel not supported', async () => {
-      const replyError: ReplyError = {
-        name: 'ReplyError',
-        message: 'Unknown command `sentinel`',
-        command: 'SENTINEL',
-      };
-      when(mockIORedisClient.call)
-        .calledWith('sentinel', ['masters'])
-        .mockRejectedValue(replyError);
-
-      const result = await service.isSentinel(mockIORedisClient);
-
-      expect(result).toEqual(false);
-    });
-  });
-
-  describe('determineClusterNodes', () => {
-    it('should return nodes in a defined format', async () => {
-      when(mockIORedisClient.call)
-        .calledWith('cluster', ['nodes'])
-        .mockResolvedValue(mockRedisClusterNodesResponse);
-
-      const result = await service.determineClusterNodes(mockIORedisClient);
-
-      expect(result).toEqual(mockClusterNodeAddresses);
-    });
-    it('cluster not supported', async () => {
-      const replyError: ReplyError = {
-        name: 'ReplyError',
-        message: 'ERR This instance has cluster support disabled',
-        command: 'CLUSTER',
-      };
-      when(mockIORedisClient.call)
-        .calledWith('cluster', ['nodes'])
-        .mockRejectedValue(replyError);
-
-      try {
-        await service.determineClusterNodes(mockIORedisClient);
-        fail('Should throw an error');
-      } catch (err) {
-        expect(err).toEqual(replyError);
-      }
-    });
-  });
-
   describe('getDatabasesCount', () => {
     it('get databases count', async () => {
-      when(mockIORedisClient.call)
-        .calledWith('config', ['get', 'databases'])
+      when(standaloneClient.call)
+        .calledWith(['config', 'get', 'databases'], expect.anything())
         .mockResolvedValue(['databases', '16']);
 
-      const result = await service.getDatabasesCount(mockIORedisClient);
+      const result = await service.getDatabasesCount(standaloneClient);
 
       expect(result).toBe(16);
     });
     it('get databases count for limited redis db', async () => {
-      when(mockIORedisClient.call)
-        .calledWith('config', ['get', 'databases'])
+      when(standaloneClient.call)
+        .calledWith(['config', 'get', 'databases'], expect.anything())
         .mockResolvedValue([]);
 
-      const result = await service.getDatabasesCount(mockIORedisClient);
+      const result = await service.getDatabasesCount(standaloneClient);
 
       expect(result).toBe(1);
     });
     it('failed to get databases config', async () => {
-      when(mockIORedisClient.call)
-        .calledWith('config', ['get', 'databases'])
+      when(standaloneClient.call)
+        .calledWith(['config', 'get', 'databases'], expect.anything())
         .mockRejectedValue(new Error("unknown command 'config'"));
 
-      const result = await service.getDatabasesCount(mockIORedisClient);
+      const result = await service.getDatabasesCount(standaloneClient);
 
       expect(result).toBe(1);
     });
@@ -223,21 +106,21 @@ describe('DatabaseInfoProvider', () => {
 
   describe('getClientListInfo', () => {
     it('get client list info', async () => {
-      when(mockIORedisClient.call)
-        .calledWith('client', ['list'])
+      when(standaloneClient.call)
+        .calledWith(['client', 'list'], expect.anything())
         .mockResolvedValue(mockRedisClientList);
 
-      const result = await service.getClientListInfo(mockIORedisClient);
+      const result = await service.getClientListInfo(standaloneClient);
 
       expect(result).toEqual(mockRedisClientListResult);
     });
     it('failed to get client list', async () => {
-      when(mockIORedisClient.call)
-        .calledWith('client', ['list'])
+      when(standaloneClient.call)
+        .calledWith(['client', 'list'], expect.anything())
         .mockRejectedValue(new Error("unknown command 'client'"));
 
       try {
-        await service.getClientListInfo(mockIORedisClient)
+        await service.getClientListInfo(standaloneClient);
       } catch (err) {
         expect(err).toBeInstanceOf(InternalServerErrorException);
       }
@@ -275,13 +158,13 @@ describe('DatabaseInfoProvider', () => {
 
   describe('determineDatabaseModules', () => {
     it('get modules by using MODULE LIST command (without filters)', async () => {
-      when(mockIORedisClient.call)
-        .calledWith('module', ['list'])
+      when(standaloneClient.call)
+        .calledWith(['module', 'list'], expect.anything())
         .mockResolvedValue(mockRedisModuleList);
 
-      const result = await service.determineDatabaseModules(mockIORedisClient);
+      const result = await service.determineDatabaseModules(standaloneClient);
 
-      expect(mockIORedisClient.call).not.toHaveBeenCalledWith('command', expect.anything());
+      expect(standaloneClient.call).not.toHaveBeenCalledWith('command', expect.anything());
       expect(result).toEqual([
         { name: AdditionalRedisModuleName.RedisAI, version: 10000, semanticVersion: '1.0.0' },
         { name: AdditionalRedisModuleName.RedisGraph, version: 10000, semanticVersion: '1.0.0' },
@@ -294,8 +177,8 @@ describe('DatabaseInfoProvider', () => {
       ]);
     });
     it('get modules by using MODULE LIST command (with filters applied)', async () => {
-      when(mockIORedisClient.call)
-        .calledWith('module', ['list'])
+      when(standaloneClient.call)
+        .calledWith(['module', 'list'], expect.anything())
         .mockResolvedValue(mockRedisModuleList);
       featureService.getByName.mockResolvedValue({
         flag: true,
@@ -309,9 +192,9 @@ describe('DatabaseInfoProvider', () => {
         },
       });
 
-      const result = await service.determineDatabaseModules(mockIORedisClient);
+      const result = await service.determineDatabaseModules(standaloneClient);
 
-      expect(mockIORedisClient.call).not.toHaveBeenCalledWith('command', expect.anything());
+      expect(standaloneClient.call).not.toHaveBeenCalledWith('command', expect.anything());
       expect(result).toEqual([
         { name: AdditionalRedisModuleName.RedisAI, version: 10000, semanticVersion: '1.0.0' },
         { name: AdditionalRedisModuleName.RedisGraph, version: 10000, semanticVersion: '1.0.0' },
@@ -324,19 +207,19 @@ describe('DatabaseInfoProvider', () => {
       ]);
     });
     it('detect all modules by using COMMAND INFO command (without filter)', async () => {
-      when(mockIORedisClient.call)
-        .calledWith('module', ['list'])
+      when(standaloneClient.call)
+        .calledWith(['module', 'list'], expect.anything())
         .mockRejectedValue(mockUnknownCommandModule);
-      when(mockIORedisClient.call)
-        .calledWith('command', expect.anything())
+      when(standaloneClient.call)
+        .calledWith(expect.arrayContaining(['command', 'info']), expect.anything())
         .mockResolvedValue([
           null,
           ['somecommand', -1, ['readonly'], 0, 0, -1, []],
         ]);
 
-      const result = await service.determineDatabaseModules(mockIORedisClient);
+      const result = await service.determineDatabaseModules(standaloneClient);
 
-      expect(mockIORedisClient.call).toHaveBeenCalledTimes(REDIS_MODULES_COMMANDS.size + 1);
+      expect(standaloneClient.call).toHaveBeenCalledTimes(REDIS_MODULES_COMMANDS.size + 1);
       expect(result).toEqual([
         { name: AdditionalRedisModuleName.RedisAI },
         { name: AdditionalRedisModuleName.RedisGraph },
@@ -348,11 +231,11 @@ describe('DatabaseInfoProvider', () => {
       ]);
     });
     it('detect all modules by using COMMAND INFO command (with filter)', async () => {
-      when(mockIORedisClient.call)
-        .calledWith('module', ['list'])
+      when(standaloneClient.call)
+        .calledWith(['module', 'list'], expect.anything())
         .mockRejectedValue(mockUnknownCommandModule);
-      when(mockIORedisClient.call)
-        .calledWith('command', expect.anything())
+      when(standaloneClient.call)
+        .calledWith(expect.arrayContaining(['command', 'info']), expect.anything())
         .mockResolvedValue([
           null,
           ['somecommand', -1, ['readonly'], 0, 0, -1, []],
@@ -369,9 +252,9 @@ describe('DatabaseInfoProvider', () => {
         },
       });
 
-      const result = await service.determineDatabaseModules(mockIORedisClient);
+      const result = await service.determineDatabaseModules(standaloneClient);
 
-      expect(mockIORedisClient.call).toHaveBeenCalledTimes(REDIS_MODULES_COMMANDS.size + 1);
+      expect(standaloneClient.call).toHaveBeenCalledTimes(REDIS_MODULES_COMMANDS.size + 1);
       expect(result).toEqual([
         { name: AdditionalRedisModuleName.RedisAI },
         { name: AdditionalRedisModuleName.RedisGraph },
@@ -383,29 +266,32 @@ describe('DatabaseInfoProvider', () => {
       ]);
     });
     it('detect only RediSearch module by using COMMAND INFO command', async () => {
-      when(mockIORedisClient.call)
-        .calledWith('module', ['list'])
+      when(standaloneClient.call)
+        .calledWith(['module', 'list'], expect.anything())
         .mockRejectedValue(mockUnknownCommandModule);
-      when(mockIORedisClient.call)
-        .calledWith('command', ['info', ...REDIS_MODULES_COMMANDS.get(AdditionalRedisModuleName.RediSearch)])
+      when(standaloneClient.call)
+        .calledWith(
+          ['command', 'info', ...REDIS_MODULES_COMMANDS.get(AdditionalRedisModuleName.RediSearch)],
+          expect.anything(),
+        )
         .mockResolvedValue([['FT.INFO', -1, ['readonly'], 0, 0, -1, []]]);
 
-      const result = await service.determineDatabaseModules(mockIORedisClient);
+      const result = await service.determineDatabaseModules(standaloneClient);
 
-      expect(mockIORedisClient.call).toHaveBeenCalledTimes(REDIS_MODULES_COMMANDS.size + 1);
+      expect(standaloneClient.call).toHaveBeenCalledTimes(REDIS_MODULES_COMMANDS.size + 1);
       expect(result).toEqual([
         { name: AdditionalRedisModuleName.RediSearch },
       ]);
     });
     it('should return empty array if MODULE LIST and COMMAND command not allowed', async () => {
-      when(mockIORedisClient.call)
-        .calledWith('module', ['list'])
+      when(standaloneClient.call)
+        .calledWith(['module', 'list'], expect.anything())
         .mockRejectedValue(mockUnknownCommandModule);
-      when(mockIORedisClient.call)
-        .calledWith('command', expect.anything())
+      when(standaloneClient.call)
+        .calledWith(expect.arrayContaining(['command', 'info']), expect.anything())
         .mockRejectedValue(mockUnknownCommandModule);
 
-      const result = await service.determineDatabaseModules(mockIORedisClient);
+      const result = await service.determineDatabaseModules(standaloneClient);
 
       expect(result).toEqual([]);
     });
@@ -413,13 +299,35 @@ describe('DatabaseInfoProvider', () => {
 
   describe('determineDatabaseServer', () => {
     it('get modules by using MODULE LIST command', async () => {
-      when(mockIORedisClient.call)
-        .calledWith('info', ['server'])
-        .mockResolvedValue(mockRedisServerInfoResponse);
+      when(standaloneClient.getInfo)
+        .mockResolvedValue(convertRedisInfoReplyToObject(mockRedisServerInfoResponse));
 
-      const result = await service.determineDatabaseServer(mockIORedisClient);
+      const result = await service.determineDatabaseServer(standaloneClient);
 
       expect(result).toEqual(mockRedisGeneralInfo.version);
+    });
+  });
+
+  describe('getRedisDBSize', () => {
+    it('get dbsize for redis standalone', async () => {
+      when(standaloneClient.sendCommand)
+        .calledWith(['dbsize'], { replyEncoding: 'utf8' })
+        .mockResolvedValue('1');
+
+      const result = await service.getRedisDBSize(standaloneClient);
+      expect(result).toEqual(1);
+    });
+
+    it('get general info for redis cluster', async () => {
+      clusterClient.nodes.mockResolvedValueOnce([standaloneClient, standaloneClient]);
+      when(standaloneClient.sendCommand)
+        .calledWith(['dbsize'], { replyEncoding: 'utf8' })
+        .mockResolvedValueOnce('1')
+        .mockResolvedValueOnce('2');
+
+      const result = await service.getRedisDBSize(clusterClient);
+
+      expect(result).toEqual(3);
     });
   });
 
@@ -428,11 +336,10 @@ describe('DatabaseInfoProvider', () => {
       service.getDatabasesCount = jest.fn().mockResolvedValue(16);
     });
     it('get general info for redis standalone', async () => {
-      when(mockIORedisClient.info)
-        .calledWith()
-        .mockResolvedValue(mockStandaloneRedisInfoReply);
+      when(standaloneClient.getInfo)
+        .mockResolvedValue(convertRedisInfoReplyToObject(mockStandaloneRedisInfoReply));
 
-      const result = await service.getRedisGeneralInfo(mockIORedisClient);
+      const result = await service.getRedisGeneralInfo(standaloneClient);
 
       expect(result).toEqual(mockRedisGeneralInfo);
     });
@@ -441,9 +348,10 @@ describe('DatabaseInfoProvider', () => {
       }\r\n${
         mockRedisClientsInfoResponse
       }\r\n`;
-      when(mockIORedisClient.info).calledWith().mockResolvedValue(reply);
+      when(standaloneClient.getInfo)
+        .mockResolvedValue(convertRedisInfoReplyToObject(reply));
 
-      const result = await service.getRedisGeneralInfo(mockIORedisClient);
+      const result = await service.getRedisGeneralInfo(standaloneClient);
 
       expect(result).toEqual({
         ...mockRedisGeneralInfo,
@@ -454,14 +362,11 @@ describe('DatabaseInfoProvider', () => {
       });
     });
     it('get general info for redis cluster', async () => {
-      when(mockIOClusterNode1.info)
-        .calledWith()
-        .mockResolvedValue(mockStandaloneRedisInfoReply);
-      when(mockIOClusterNode2.info)
-        .calledWith()
-        .mockResolvedValue(mockStandaloneRedisInfoReply);
+      clusterClient.nodes.mockResolvedValueOnce([standaloneClient, standaloneClient]);
+      when(standaloneClient.getInfo)
+        .mockResolvedValue(convertRedisInfoReplyToObject(mockStandaloneRedisInfoReply))
 
-      const result = await service.getRedisGeneralInfo(mockIORedisCluster);
+      const result = await service.getRedisGeneralInfo(clusterClient);
 
       expect(result).toEqual({
         version: mockRedisGeneralInfo.version,
@@ -470,115 +375,48 @@ describe('DatabaseInfoProvider', () => {
         nodes: [mockRedisGeneralInfo, mockRedisGeneralInfo],
       });
     });
-    it('should throw an error if no permission to run \'info\' command', async () => {
-      mockIORedisClient.info.mockRejectedValue({
-        message: 'NOPERM this user has no permissions to run the \'info\' command',
+    it('should get info from hello command when info command is not available', async () => {
+      when(standaloneClient.getInfo)
+        .mockResolvedValue({
+          replication: {
+            role: mockRedisGeneralInfo.role,
+          },
+          server: {
+            redis_mode: mockRedisServerInfoDto.redis_mode,
+            redis_version: mockRedisGeneralInfo.version,
+            server_name: 'redis',
+          },
+        });
+
+      const result = await service.getRedisGeneralInfo(standaloneClient);
+
+      expect(result).toEqual({
+        ...mockRedisGeneralInfo,
+        server: {
+          redis_mode: mockRedisServerInfoDto.redis_mode,
+          redis_version: mockRedisGeneralInfo.version,
+          server_name: 'redis',
+        },
+        uptimeInSeconds: undefined,
+        totalKeys: undefined,
+        usedMemory: undefined,
+        hitRatio: undefined,
+        connectedClients: undefined,
+        cashedScripts: undefined,
       });
+    });
+    it('should throw an error if no permission to run \'info\' and \'hello\' commands', async () => {
+      when(standaloneClient.getInfo)
+        .mockRejectedValue({
+          message: 'NOPERM this user has no permissions to run the \'hello\' command',
+        });
 
       try {
-        await service.getRedisGeneralInfo(mockIORedisClient);
+        await service.getRedisGeneralInfo(standaloneClient);
         fail('Should throw an error');
       } catch (err) {
         expect(err).toBeInstanceOf(ForbiddenException);
       }
-    });
-  });
-
-  describe('getMasterEndpoints', () => {
-    it('succeed to get sentinel master endpoints', async () => {
-      const masterName = mockSentinelMasterDto.name;
-      mockIORedisClient.call.mockResolvedValue([]);
-
-      const result = await service['getMasterEndpoints']({
-        ...mockIORedisClient,
-        options: {
-          host: mockSentinelMasterEndpoint.host,
-          port: mockSentinelMasterEndpoint.port,
-        },
-      }, masterName);
-
-      expect(mockIORedisClient.call).toHaveBeenCalledWith('sentinel', [
-        'sentinels',
-        masterName,
-      ]);
-
-      expect(result).toEqual([mockSentinelMasterEndpoint]);
-    });
-
-    it('wrong database type', async () => {
-      mockIORedisClient.call.mockRejectedValue({
-        message:
-          'ERR unknown command `sentinel`, with args beginning with: `masters`',
-      });
-
-      await expect(
-        service['getMasterEndpoints'](mockIORedisClient, mockSentinelMasterDto.name),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it("user don't have required permissions", async () => {
-      const error: ReplyError = {
-        ...mockRedisNoPermError,
-        command: 'SENTINEL',
-      };
-      mockIORedisClient.call.mockRejectedValue(error);
-
-      await expect(
-        service['getMasterEndpoints'](mockIORedisClient, mockSentinelMasterDto.name),
-      ).rejects.toThrow(ForbiddenException);
-    });
-  });
-
-  describe('determineSentinelMasterGroups', () => {
-    let spy;
-
-    beforeEach(() => {
-      spy = jest.spyOn(service as any, 'getMasterEndpoints');
-    });
-
-    it('succeed to get sentinel masters', async () => {
-      spy.mockResolvedValue([mockSentinelConnectionOptions]);
-      mockIORedisClient.call.mockResolvedValue(
-        [mockSentinelMasterInOkState, mockSentinelMasterInDownState],
-      );
-
-      const result = await service.determineSentinelMasterGroups(mockIORedisClient);
-
-      expect(mockIORedisClient.call).toHaveBeenCalledWith('sentinel', [
-        'masters',
-      ]);
-      expect(result).toEqual([
-        mockSentinelMasterDto,
-        {
-          ...mockSentinelMasterDto,
-          status: SentinelMasterStatus.Down,
-        },
-      ]);
-    });
-    it('wrong database type', async () => {
-      mockIORedisClient.call.mockRejectedValue({
-        message:
-          'ERR unknown command `sentinel`, with args beginning with: `masters`',
-      });
-
-      try {
-        await service.determineSentinelMasterGroups(mockIORedisClient);
-        fail('Should throw an error');
-      } catch (err) {
-        expect(err).toBeInstanceOf(BadRequestException);
-        expect(err.message).toEqual(ERROR_MESSAGES.WRONG_DISCOVERY_TOOL());
-      }
-    });
-    it("user don't have required permissions", async () => {
-      const error: ReplyError = {
-        ...mockRedisNoPermError,
-        command: 'SENTINEL',
-      };
-      mockIORedisClient.call.mockRejectedValue(error);
-
-      await expect(service.determineSentinelMasterGroups(mockIORedisClient)).rejects.toThrow(
-        ForbiddenException,
-      );
     });
   });
 });

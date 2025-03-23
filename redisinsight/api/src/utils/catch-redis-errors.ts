@@ -1,11 +1,13 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   GatewayTimeoutException,
   HttpException,
   HttpStatus,
   InternalServerErrorException,
   MethodNotAllowedException,
+  NotFoundException,
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -13,6 +15,7 @@ import { ReplyError } from 'src/models';
 import { RedisErrorCodes, CertificatesErrorCodes } from 'src/constants';
 import ERROR_MESSAGES from 'src/constants/error-messages';
 import { EncryptionServiceErrorException } from 'src/modules/encryption/exceptions';
+import { RedisClientCommandReply } from 'src/modules/redis/client';
 
 export const isCertError = (error: ReplyError): boolean => {
   try {
@@ -72,11 +75,16 @@ export const getRedisConnectionException = (
       );
     }
 
+    if (error.message.includes(RedisErrorCodes.ClusterAllFailedError)) {
+      return new ServiceUnavailableException(
+        ERROR_MESSAGES.DB_CLUSTER_CONNECT_FAILED,
+      );
+    }
+
     if (
       error.message.includes(RedisErrorCodes.ConnectionRefused)
       || error.message.includes(RedisErrorCodes.ConnectionNotFound)
       || error.message.includes(RedisErrorCodes.DNSTimeoutError)
-      || error.message.includes('Failed to refresh slots cache')
       || error?.code === RedisErrorCodes.ConnectionReset
     ) {
       return new ServiceUnavailableException(
@@ -112,7 +120,12 @@ export const catchRedisConnectionError = (
 
 export const catchAclError = (error: ReplyError): HttpException => {
   // todo: Move to other place after refactoring
-  if (error instanceof EncryptionServiceErrorException) {
+  if (
+    error instanceof EncryptionServiceErrorException
+    || error instanceof NotFoundException
+    || error instanceof ConflictException
+    || error instanceof ServiceUnavailableException
+  ) {
     throw error;
   }
 
@@ -144,4 +157,12 @@ export const catchTransactionError = (
   if (previousErrors.length) {
     throw previousErrors[0];
   }
+};
+
+export const catchMultiTransactionError = (
+  transactionResults: [Error, RedisClientCommandReply][],
+): void => {
+  transactionResults.forEach(([err]) => {
+    if (err) throw err;
+  });
 };

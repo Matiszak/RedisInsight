@@ -4,7 +4,9 @@ import {
   splitMonacoValuePerLines,
   findArgIndexByCursor,
   isParamsLine,
-  getMonacoLines
+  getMonacoLines,
+  getCommandsFromQuery,
+  splitQueryByArgs
 } from 'uiSrc/utils'
 
 describe('removeMonacoComments', () => {
@@ -188,4 +190,102 @@ describe('getMonacoLines', () => {
       expect(result).toEqual(expectedResult)
     }
   )
+})
+
+describe('getCommandsFromQuery', () => {
+  const commandsArray = [
+    'FT.INFO',
+    'INFO'
+  ]
+  const cases = [
+    ['ft.info a b \ninfo\nany command', 'FT.INFO;INFO;any'],
+    ['a b \nset a b', 'a;set'],
+    ['\n\ninfo \n\nany command', 'INFO;any'],
+    ['info', 'INFO'],
+  ]
+  test.each(cases)(
+    'given %p as argument, returns %p',
+    (query: string, expectedResult) => {
+      const result = getCommandsFromQuery(query, commandsArray)
+      expect(result).toEqual(expectedResult)
+    }
+  )
+})
+
+const splitQueryByArgsTests: Array<{
+  input: [string, number?]
+  result: any
+}> = [
+  {
+    input: ['FT.SEARCH "idx:bicycle" "" WITHSORTKEYS'],
+    result: {
+      args: [[], ['FT.SEARCH', '"idx:bicycle"', '""', 'WITHSORTKEYS']],
+      cursor: {
+        argLeftOffset: 10,
+        argRightOffset: 23,
+        isCursorInQuotes: false,
+        nextCursorChar: 'F',
+        prevCursorChar: ''
+      }
+    }
+  },
+  {
+    input: ['FT.SEARCH "idx:bicycle" "" WITHSORTKEYS', 17],
+    result: {
+      args: [['FT.SEARCH'], ['"idx:bicycle"', '""', 'WITHSORTKEYS']],
+      cursor: {
+        argLeftOffset: 10,
+        argRightOffset: 23,
+        isCursorInQuotes: true,
+        nextCursorChar: 'c',
+        prevCursorChar: 'i'
+      }
+    }
+  },
+  {
+    input: ['FT.SEARCH "idx:bicycle" "" WITHSORTKEYS', 39],
+    result: {
+      args: [['FT.SEARCH', '"idx:bicycle"', '""'], ['WITHSORTKEYS']],
+      cursor: {
+        argLeftOffset: 27,
+        argRightOffset: 39,
+        isCursorInQuotes: false,
+        nextCursorChar: '',
+        prevCursorChar: 'S'
+      }
+    }
+  },
+  {
+    input: ['FT.SEARCH "idx:bicycle" "" WITHSORTKEYS ', 40],
+    result: {
+      args: [['FT.SEARCH', '"idx:bicycle"', '""', 'WITHSORTKEYS'], []],
+      cursor: {
+        argLeftOffset: 0,
+        argRightOffset: 0,
+        isCursorInQuotes: false,
+        nextCursorChar: '',
+        prevCursorChar: ''
+      }
+    }
+  },
+  {
+    input: ['FT.SEARCH "idx:bicycle \\" \\"" "" WITHSORTKEYS ', 46],
+    result: {
+      args: [['FT.SEARCH', '"idx:bicycle " ""', '""', 'WITHSORTKEYS'], []],
+      cursor: {
+        argLeftOffset: 0,
+        argRightOffset: 0,
+        isCursorInQuotes: false,
+        nextCursorChar: '',
+        prevCursorChar: ''
+      }
+    }
+  }
+]
+
+describe('splitQueryByArgs', () => {
+  it.each(splitQueryByArgsTests)('should return for %input proper result', ({ input, result }) => {
+    const testResult = splitQueryByArgs(...input)
+    expect(testResult).toEqual(result)
+  })
 })

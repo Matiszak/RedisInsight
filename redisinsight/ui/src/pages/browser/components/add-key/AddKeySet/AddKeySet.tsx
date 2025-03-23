@@ -1,5 +1,4 @@
 import React, { ChangeEvent, FormEvent, useState, useEffect, useRef } from 'react'
-import cx from 'classnames'
 import { useDispatch, useSelector } from 'react-redux'
 import {
   EuiButton,
@@ -15,20 +14,15 @@ import { Maybe, stringToBuffer } from 'uiSrc/utils'
 import {
   addSetKey, addKeyStateSelector,
 } from 'uiSrc/slices/browser/keys'
-import AddItemsActions from 'uiSrc/pages/browser/components/add-items-actions/AddItemsActions'
-import { CreateSetWithExpireDto } from 'apiSrc/modules/browser/dto/set.dto'
 
+import AddMultipleFields from 'uiSrc/pages/browser/components/add-multiple-fields'
+import { CreateSetWithExpireDto } from 'apiSrc/modules/browser/set/dto'
+
+import { INITIAL_SET_MEMBER_STATE, ISetMemberState } from './interfaces'
 import {
   AddSetFormConfig as config
 } from '../constants/fields-config'
 import AddKeyFooter from '../AddKeyFooter/AddKeyFooter'
-
-import {
-  INITIAL_SET_MEMBER_STATE,
-  ISetMemberState
-} from '../../key-details-add-items/add-set-members/AddSetMembers'
-
-import styles from '../../key-details-add-items/styles.module.scss'
 
 export interface Props {
   keyName: string
@@ -83,6 +77,15 @@ const AddKeySet = (props: Props) => {
     setMembers(newState)
   }
 
+  const onClickRemove = ({ id }: ISetMemberState) => {
+    if (members.length === 1) {
+      clearMemberValues(id)
+      return
+    }
+
+    removeMember(id)
+  }
+
   const handleMemberChange = (
     formField: string,
     id: number,
@@ -122,58 +125,37 @@ const AddKeySet = (props: Props) => {
 
   return (
     <EuiForm component="form" onSubmit={onFormSubmit}>
-      <EuiFormRow label="Members" fullWidth>
-        <EuiFlexItem grow>
-          {
-            members.map((item, index) => (
-              <EuiFlexItem
-                style={{ marginBottom: '8px' }}
-                className={cx('flexItemNoFullWidth', 'inlineFieldsNoSpace')}
-                grow
-                key={item.id}
-              >
-                <EuiFlexGroup gutterSize="m">
-                  <EuiFlexItem grow>
-                    <EuiFlexGroup gutterSize="none" alignItems="center">
-                      <EuiFlexItem grow>
-                        <EuiFormRow fullWidth>
-                          <EuiFieldText
-                            fullWidth
-                            name={`member-${item.id}`}
-                            id={`member-${item.id}`}
-                            placeholder={config.member.placeholder}
-                            value={item.name}
-                            onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                              handleMemberChange(
-                                'name',
-                                item.id,
-                                e.target.value
-                              )}
-                            inputRef={index === members.length - 1 ? lastAddedMemberName : null}
-                            disabled={loading}
-                            data-testid="member-name"
-                          />
-                        </EuiFormRow>
-                      </EuiFlexItem>
-                    </EuiFlexGroup>
-                  </EuiFlexItem>
-                  <AddItemsActions
-                    id={item.id}
-                    index={index}
-                    length={members.length}
-                    addItem={addMember}
-                    removeItem={removeMember}
-                    clearIsDisabled={isClearDisabled(item)}
-                    clearItemValues={clearMemberValues}
-                    loading={loading}
-                    anchorClassName={styles.refreshKeyTooltip}
-                  />
-                </EuiFlexGroup>
-              </EuiFlexItem>
-            ))
-          }
-        </EuiFlexItem>
-      </EuiFormRow>
+      <AddMultipleFields
+        items={members}
+        isClearDisabled={isClearDisabled}
+        onClickRemove={onClickRemove}
+        onClickAdd={addMember}
+      >
+        {(item, index) => (
+          <EuiFlexGroup gutterSize="none" alignItems="center">
+            <EuiFlexItem grow>
+              <EuiFormRow fullWidth>
+                <EuiFieldText
+                  fullWidth
+                  name={`member-${item.id}`}
+                  id={`member-${item.id}`}
+                  placeholder={config.member.placeholder}
+                  value={item.name}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    handleMemberChange(
+                      'name',
+                      item.id,
+                      e.target.value
+                    )}
+                  inputRef={index === members.length - 1 ? lastAddedMemberName : null}
+                  disabled={loading}
+                  data-testid="member-name"
+                />
+              </EuiFormRow>
+            </EuiFlexItem>
+          </EuiFlexGroup>
+        )}
+      </AddMultipleFields>
       <EuiButton type="submit" fill style={{ display: 'none' }}>
         Submit
       </EuiButton>

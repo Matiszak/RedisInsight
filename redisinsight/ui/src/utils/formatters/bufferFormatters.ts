@@ -3,6 +3,7 @@ import { ObjectInputStream } from 'java-object-serialization'
 import { TextDecoder, TextEncoder } from 'text-encoding'
 import { Buffer } from 'buffer'
 import { KeyValueFormat } from 'uiSrc/constants'
+import JavaDate from './java-date'
 // eslint-disable-next-line import/order
 import {
   RedisResponseBuffer,
@@ -12,11 +13,15 @@ import {
 } from 'uiSrc/slices/interfaces'
 import { Nullable } from '../types'
 
+ObjectInputStream.RegisterObjectClass(JavaDate, JavaDate.ClassName, JavaDate.SerialVersionUID)
+
 const decoder = new TextDecoder('utf-8')
 const encoder = new TextEncoder()
 
-const isEqualBuffers = (a?: Nullable<RedisResponseBuffer>, b?: Nullable<RedisResponseBuffer>) =>
-  a?.data?.join(',') === b?.data?.join(',')
+const isEqualBuffers = (a?: Nullable<RedisResponseBuffer>, b?: Nullable<RedisResponseBuffer>) => {
+  if (a?.data?.length !== b?.data?.length) return false
+  return a?.data?.join(',') === b?.data?.join(',')
+}
 
 // eslint-disable-next-line no-control-regex
 const IS_NON_PRINTABLE_ASCII_CHARACTER = /[^ -~\u0007\b\t\n\r]/
@@ -82,7 +87,7 @@ const bufferToASCII = (reply: RedisResponseBuffer): string => {
   return result
 }
 
-const anyToBuffer = (reply: UintArray): RedisResponseBuffer =>
+const anyToBuffer = (reply: UintArray | ArrayBuffer): RedisResponseBuffer =>
   ({ data: reply, type: RedisResponseBufferType.Buffer }) as RedisResponseBuffer
 
 const ASCIIToBuffer = (strInit: string) => {
@@ -105,6 +110,28 @@ const ASCIIToBuffer = (strInit: string) => {
   }
 
   return anyToBuffer(Array.from(Buffer.from(result, 'hex')))
+}
+
+const bufferToFloat32Array = (data: Uint8Array) => {
+  const { buffer } = new Uint8Array(data)
+  const dataView = new DataView(buffer)
+  const vector = []
+
+  for (let i = 0; i < dataView.byteLength; i += 4) {
+    vector.push(dataView.getFloat32(i, true))
+  }
+  return new Float32Array(vector)
+}
+
+const bufferToFloat64Array = (data: Uint8Array) => {
+  const { buffer } = new Uint8Array(data)
+  const dataView = new DataView(buffer)
+  const vector = []
+
+  for (let i = 0; i < dataView.byteLength; i += 8) {
+    vector.push(dataView.getFloat64(i, true))
+  }
+  return new Float64Array(vector)
 }
 
 const bufferToUint8Array = (reply: RedisResponseBuffer): Uint8Array => new Uint8Array(reply.data)
@@ -147,6 +174,10 @@ const bufferToJava = (reply: RedisResponseBuffer) => {
     return decoded
   }
 
+  if (decoded instanceof Date) {
+    return decoded
+  }
+
   const { fields } = decoded
   const fieldsArray = Array.from(fields, ([key, value]) => ({ [key]: value }))
   return { ...decoded, fields: fieldsArray }
@@ -186,7 +217,9 @@ export {
   anyToBuffer,
   bufferToBinary,
   binaryToBuffer,
-  bufferToJava
+  bufferToJava,
+  bufferToFloat32Array,
+  bufferToFloat64Array,
 }
 
 window.ri = {

@@ -2,14 +2,6 @@ import {
   chunk, isInteger, isString, isNumber, isNaN,
 } from 'lodash';
 
-export const convertStringsArrayToObject = (input: string[]): { [key: string]: any } => chunk(
-  input,
-  2,
-).reduce((prev: any, current: string[]) => {
-  const [key, value] = current;
-  return { ...prev, [key.toLowerCase()]: value };
-}, {});
-
 export const convertIntToSemanticVersion = (input: number): string => {
   const separator = '.';
   try {
@@ -43,4 +35,20 @@ export const convertStringToNumber = (value: any, defaultValue?: number): number
   }
 
   return num;
+};
+
+export const convertAnyStringToPositiveInteger = (str: string) => {
+  if (!isString(str) || !str.length) {
+    return -1;
+  }
+
+  let hash = 0;
+  for (let i = 0; i < str.length; i += 1) {
+    const char = str.charCodeAt(i);
+    // eslint-disable-next-line no-bitwise
+    hash = (hash << 5) - hash + char;
+    // eslint-disable-next-line no-bitwise
+    hash |= 0;
+  }
+  return Math.abs(hash);
 };

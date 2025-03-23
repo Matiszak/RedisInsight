@@ -27,7 +27,7 @@ import {
 } from 'src/modules/redis-enterprise/dto/redis-enterprise-cluster.dto';
 import { HostingProvider } from 'src/modules/database/entities/database.entity';
 import { DatabaseService } from 'src/modules/database/database.service';
-import { ActionStatus } from 'src/common/models';
+import { ActionStatus, SessionMetadata } from 'src/common/models';
 
 @Injectable()
 export class RedisEnterpriseService {
@@ -41,14 +41,16 @@ export class RedisEnterpriseService {
   // TODO: maybe find a workaround without Disabling certificate validation.
   private api = axios.create({
     httpsAgent: new https.Agent({
+      // we might work with self-signed certificates for local builds
       rejectUnauthorized: false, // lgtm[js/disabling-certificate-validation]
     }),
   });
 
   async getDatabases(
+    sessionMetadata: SessionMetadata,
     dto: ClusterConnectionDetailsDto,
   ): Promise<RedisEnterpriseDatabase[]> {
-    this.logger.log('Getting RE cluster databases.');
+    this.logger.debug('Getting RE cluster databases.', sessionMetadata);
     const {
       host, port, username, password,
     } = dto;
@@ -57,14 +59,14 @@ export class RedisEnterpriseService {
       const { data } = await this.api.get(`https://${host}:${port}/v1/bdbs`, {
         auth,
       });
-      this.logger.log('Succeed to get RE cluster databases.');
+      this.logger.debug('Succeed to get RE cluster databases.', sessionMetadata);
       const result = this.parseClusterDbsResponse(data);
-      this.analytics.sendGetREClusterDbsSucceedEvent(result);
+      this.analytics.sendGetREClusterDbsSucceedEvent(sessionMetadata, result);
       return result;
     } catch (error) {
       const { response } = error;
       let exception;
-      this.logger.error(`Failed to get RE cluster databases. ${error.message}`);
+      this.logger.error(`Failed to get RE cluster databases. ${error.message}`, error, sessionMetadata);
       if (response?.status === 401 || response?.status === 403) {
         exception = new ForbiddenException(
           ERROR_MESSAGES.INCORRECT_CREDENTIALS(`${host}:${port}`),
@@ -74,7 +76,7 @@ export class RedisEnterpriseService {
           ERROR_MESSAGES.INCORRECT_DATABASE_URL(`${host}:${port}`),
         );
       }
-      this.analytics.sendGetREClusterDbsFailedEvent(exception);
+      this.analytics.sendGetREClusterDbsFailedEvent(sessionMetadata, exception);
       throw exception;
     }
   }
@@ -185,13 +187,15 @@ export class RedisEnterpriseService {
   }
 
   public async addRedisEnterpriseDatabases(
+    sessionMetadata: SessionMetadata,
     connectionDetails: ClusterConnectionDetailsDto,
     uids: number[],
   ): Promise<AddRedisEnterpriseDatabaseResponse[]> {
-    this.logger.log('Adding Redis Enterprise databases.');
+    this.logger.debug('Adding Redis Enterprise databases.', sessionMetadata);
     let result: AddRedisEnterpriseDatabaseResponse[];
     try {
       const databases: RedisEnterpriseDatabase[] = await this.getDatabases(
+        sessionMetadata,
         connectionDetails,
       );
       result = await Promise.all(
@@ -215,14 +219,17 @@ export class RedisEnterpriseService {
               } = database;
               const host = connectionDetails.host === 'localhost' ? 'localhost' : dnsName;
               delete database.password;
-              await this.databaseService.create({
-                host,
-                port,
-                name,
-                nameFromProvider: name,
-                password,
-                provider: HostingProvider.RE_CLUSTER,
-              });
+              await this.databaseService.create(
+                sessionMetadata,
+                {
+                  host,
+                  port,
+                  name,
+                  nameFromProvider: name,
+                  password,
+                  provider: HostingProvider.RE_CLUSTER,
+                },
+              );
               return {
                 uid,
                 status: ActionStatus.Success,
@@ -242,7 +249,7 @@ export class RedisEnterpriseService {
         ),
       );
     } catch (error) {
-      this.logger.error('Failed to add Redis Enterprise databases', error);
+      this.logger.error('Failed to add Redis Enterprise databases', error, sessionMetadata);
       throw error;
     }
     return result;

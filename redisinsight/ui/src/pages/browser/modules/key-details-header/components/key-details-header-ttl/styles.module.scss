@@ -1,0 +1,63 @@
+.subtitleText {
+  padding: 6px 2px 6px 0;
+}
+
+.controlsKey {
+  right: 25px;
+}
+
+.cancelEditBtn:hover {
+  color: var(--euiColorColorDanger) !important;
+}
+
+.applyEditBtn:hover {
+  color: var(--euiColorSecondary) !important;
+}
+
+.flexItemTTL {
+  width: 152px;
+  min-width: 152px;
+}
+
+.ttlInput {
+  min-width: 106px;
+  font-size: 13px !important;
+  &.editing {
+    width: 124px;
+  }
+}
+
+.ttlGridComponent,
+.classNameGridComponent {
+  position: relative;
+}
+
+.hidden {
+  display: none;
+}
+
+.ttlTextValue {
+  padding-left: 11px;
+}
+
+@include global.insights-open {
+  .flexItemTTL {
+    width: 134px;
+    min-width: 134px;
+  }
+
+  .ttlInput {
+    min-width: 90px;
+    font-size: 12px !important;
+    &.editing {
+      width: 92px;
+    }
+  }
+
+  :global(.euiFormControlLayout--compressed > .euiFormControlLayout__append) {
+    &.iconPencil {
+      width: 24px !important;
+      padding: 0 6px !important;
+    }
+  }
+}

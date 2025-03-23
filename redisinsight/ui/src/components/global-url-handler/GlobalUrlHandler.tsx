@@ -1,12 +1,13 @@
 import { useHistory, useLocation } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { useEffect } from 'react'
-import { ConnectionString } from 'connection-string'
-import { isNull, isNumber, every, values, pick } from 'lodash'
-import { Pages, REDIS_URI_SCHEMES } from 'uiSrc/constants'
+import { isNull, isNumber, every, values, pick, some } from 'lodash'
+import { Pages } from 'uiSrc/constants'
+import { ADD_NEW_CA_CERT, ADD_NEW } from 'uiSrc/pages/home/constants'
 import {
   appRedirectionSelector,
   setFromUrl,
+  setReturnUrl,
   setUrlDbConnection,
   setUrlHandlingInitialState,
   setUrlProperties
@@ -15,7 +16,13 @@ import { userSettingsSelector } from 'uiSrc/slices/user/user-settings'
 import { UrlHandlingActions } from 'uiSrc/slices/interfaces/urlHandling'
 import { autoCreateAndConnectToInstanceAction } from 'uiSrc/slices/instances/instances'
 import { getRedirectionPage } from 'uiSrc/utils/routing'
-import { Nullable, transformQueryParamsObject } from 'uiSrc/utils'
+import { Nullable, transformQueryParamsObject, parseRedisUrl, Maybe } from 'uiSrc/utils'
+import { changeSidePanel } from 'uiSrc/slices/panels/sidePanels'
+import { SidePanels } from 'uiSrc/slices/interfaces/insights'
+import { setOnboarding } from 'uiSrc/slices/app/features'
+import { ONBOARDING_FEATURES } from 'uiSrc/components/onboarding-features'
+import { localStorageService } from 'uiSrc/services'
+import { AppStorageItem } from 'uiSrc/constants/storage'
 
 const GlobalUrlHandler = () => {
   const { fromUrl } = useSelector(appRedirectionSelector)
@@ -24,6 +31,7 @@ const GlobalUrlHandler = () => {
 
   const history = useHistory()
   const dispatch = useDispatch()
+  const location = useLocation()
 
   useEffect(() => {
     // start handling only after closing consent popup
@@ -33,21 +41,26 @@ const GlobalUrlHandler = () => {
     try {
       const actionUrl = new URL(fromUrl)
       const fromParams = new URLSearchParams(actionUrl.search)
+      const pathname = actionUrl.hostname + actionUrl.pathname
+      const action = pathname?.replace(/^(\/\/?)|\/$/g, '')
 
       // @ts-ignore
       const urlProperties = Object.fromEntries(fromParams) || {}
 
       // rename cloudBdbId to cloudId
-      urlProperties.cloudId = urlProperties.cloudBdbId
-      delete urlProperties.cloudBdbId
+      if (action === UrlHandlingActions.Connect) {
+        urlProperties.cloudId = urlProperties.cloudBdbId
+        delete urlProperties.cloudBdbId
+      }
 
       dispatch(setUrlProperties(urlProperties))
       dispatch(setFromUrl(null))
 
-      const pathname = actionUrl.hostname + actionUrl.pathname
-      if (pathname?.replace(/^(\/\/?)/g, '') === UrlHandlingActions.Connect) {
-        connectToDatabase(urlProperties)
-      }
+      const transformedProperties = transformQueryParamsObject(urlProperties)
+      handleCommonProperties(transformedProperties)
+
+      if (action === UrlHandlingActions.Connect) connectToDatabase(urlProperties)
+      if (action === UrlHandlingActions.Open) openPage(transformedProperties)
     } catch (_e) {
       //
     }
@@ -57,21 +70,31 @@ const GlobalUrlHandler = () => {
     try {
       const params = new URLSearchParams(search)
       const from = params.get('from')
+      const returnUrl = params.get('returnUrl')
 
       if (from) {
-        dispatch(setFromUrl(decodeURIComponent(from)))
+        dispatch(setFromUrl(from))
         history.replace({
           search: ''
         })
       }
-    } catch (_e) {
+      if (returnUrl) {
+        localStorageService.set(AppStorageItem.returnUrl, returnUrl)
+        dispatch(setReturnUrl(returnUrl))
+        history.push(location.pathname)
+      }
+    } catch {
       // do nothing
     }
   }, [search])
 
-  const onSuccessConnectToDb = (id: string, redirectPage: Nullable<string>) => {
+  const redirectToPage = (
+    id: Maybe<string>,
+    redirectPage: Nullable<string>,
+    currentPathname?: string
+  ) => {
     if (redirectPage) {
-      const pageToRedirect = getRedirectionPage(redirectPage, id)
+      const pageToRedirect = getRedirectionPage(redirectPage, id || undefined, currentPathname)
 
       if (pageToRedirect) {
         history.push(pageToRedirect)
@@ -79,7 +102,7 @@ const GlobalUrlHandler = () => {
       }
     }
 
-    history.push(Pages.browser(id))
+    history.push(id ? Pages.browser(id) : Pages.home)
   }
 
   const connectToDatabase = (properties: Record<string, any>) => {
@@ -87,8 +110,10 @@ const GlobalUrlHandler = () => {
       const {
         redisUrl,
         databaseAlias,
-        requiredTls,
         redirect,
+        requiredTls,
+        requiredCaCert,
+        requiredClientCert,
       } = properties
 
       const cloudDetails = transformQueryParamsObject(
@@ -98,31 +123,37 @@ const GlobalUrlHandler = () => {
         )
       )
 
-      const url = new ConnectionString(redisUrl)
+      const url = parseRedisUrl(redisUrl)
 
-      /* If a protocol exists, it should be a redis protocol */
-      if (url.protocol && !REDIS_URI_SCHEMES.includes(url.protocol)) return
+      if (!url) return
 
       const obligatoryForAutoConnectFields = {
-        host: url.hostname,
-        port: url.port,
-        username: url.user,
-        password: url.password
+        host: url.host,
+        port: url.port || 6379,
+        username: url.username,
+        password: url.password,
+      }
+
+      const tlsFields = {
+        requiredTls,
+        requiredCaCert,
+        requiredClientCert,
       }
 
       const isAllObligatoryProvided = every(values(obligatoryForAutoConnectFields), (value) => value || isNumber(value))
+      const isTlsProvided = some(values(tlsFields), (value) => value === 'true')
 
       const db = {
         ...obligatoryForAutoConnectFields,
-        name: databaseAlias || url.host,
+        name: databaseAlias || url.hostname || url.host,
       } as any
 
-      if (isAllObligatoryProvided && requiredTls !== 'true') {
+      if (isAllObligatoryProvided && !isTlsProvided) {
         if (cloudDetails?.cloudId) {
           db.cloudDetails = cloudDetails
         }
         dispatch(setUrlHandlingInitialState())
-        dispatch(autoCreateAndConnectToInstanceAction(db, (id) => onSuccessConnectToDb(id, redirect)))
+        dispatch(autoCreateAndConnectToInstanceAction(db, (id) => redirectToPage(id, redirect)))
 
         return
       }
@@ -131,7 +162,10 @@ const GlobalUrlHandler = () => {
         action: UrlHandlingActions.Connect,
         dbConnection: {
           ...db,
-          tls: requiredTls === 'true',
+          // set tls with new cert option
+          tls: isTlsProvided,
+          caCert: requiredCaCert === 'true' ? { id: ADD_NEW_CA_CERT } : undefined,
+          clientCert: requiredClientCert === 'true' ? { id: ADD_NEW } : undefined,
         }
       }))
 
@@ -139,6 +173,21 @@ const GlobalUrlHandler = () => {
     } catch (e) {
       //
     }
+  }
+
+  const handleCommonProperties = (properties: Record<string, any>) => {
+    if (properties.copilot) {
+      dispatch(changeSidePanel(SidePanels.AiAssistant))
+    }
+
+    if (properties.onboarding) {
+      const totalSteps = Object.keys(ONBOARDING_FEATURES || {}).length
+      dispatch(setOnboarding({ currentStep: 0, totalSteps }))
+    }
+  }
+
+  const openPage = (properties: Record<string, any>) => {
+    redirectToPage(undefined, properties.redirect || '/_', location.pathname)
   }
 
   return null

@@ -33,7 +33,6 @@ export interface Props {
   selectKey: ({ rowData }: { rowData: any }) => void
   removeSelectedKey: () => void
   handleAddKeyPanel: (value: boolean) => void
-  handleBulkActionsPanel: (value: boolean) => void
 }
 
 const BrowserLeftPanel = (props: Props) => {
@@ -42,7 +41,6 @@ const BrowserLeftPanel = (props: Props) => {
     selectKey,
     removeSelectedKey,
     handleAddKeyPanel,
-    handleBulkActionsPanel
   } = props
 
   const { instanceId } = useParams<{ instanceId: string }>()
@@ -57,6 +55,7 @@ const BrowserLeftPanel = (props: Props) => {
     isSearched: patternIsSearched,
     filter,
     deleting,
+    error: keysError,
   } = useSelector(keysSelector)
   const { contextInstanceId } = useSelector(appContextSelector)
   const {
@@ -69,7 +68,8 @@ const BrowserLeftPanel = (props: Props) => {
 
   const isDataLoaded = searchMode === SearchMode.Pattern ? isDataPatternLoaded : isDataRedisearchLoaded
   const keysState = searchMode === SearchMode.Pattern ? patternKeysState : redisearchKeysState
-  const loading = searchMode === SearchMode.Pattern ? patternLoading : redisearchLoading || redisearchListLoading
+  const loading = searchMode === SearchMode.Pattern ? patternLoading : redisearchLoading
+  const headerLoading = searchMode === SearchMode.Pattern ? patternLoading : redisearchListLoading
   const isSearched = searchMode === SearchMode.Pattern ? patternIsSearched : redisearchIsSearched
   const scrollTopPosition = searchMode === SearchMode.Pattern ? scrollPatternTopPosition : scrollRedisearchTopPosition
   const commonFilterType = searchMode === SearchMode.Pattern ? filter : keysState.keys?.[0]?.type
@@ -120,18 +120,18 @@ const BrowserLeftPanel = (props: Props) => {
     },
     [selectedKey],
   )
-
   return (
     <div className={styles.container}>
       <KeysHeader
         keysState={keysState}
-        loading={loading}
+        loading={headerLoading}
         isSearched={isSearched}
         loadKeys={loadKeys}
         handleScanMoreClick={handleScanMoreClick}
         nextCursor={keysState.nextCursor}
       />
-      {viewType === KeyViewType.Browser && (
+      {keysError && <div className={styles.error}><div>{keysError}</div></div>}
+      {viewType === KeyViewType.Browser && !keysError && (
         <KeyList
           hideFooter
           ref={keyListRef}
@@ -143,10 +143,9 @@ const BrowserLeftPanel = (props: Props) => {
           selectKey={selectKey}
           onDelete={onDeleteKey}
           onAddKeyPanel={handleAddKeyPanel}
-          onBulkActionsPanel={handleBulkActionsPanel}
         />
       )}
-      {viewType === KeyViewType.Tree && (
+      {viewType === KeyViewType.Tree && !keysError && (
         <KeyTree
           ref={keyListRef}
           keysState={keysState}
@@ -157,7 +156,6 @@ const BrowserLeftPanel = (props: Props) => {
           onDelete={onDeleteKey}
           deleting={deleting}
           onAddKeyPanel={handleAddKeyPanel}
-          onBulkActionsPanel={handleBulkActionsPanel}
         />
       )}
     </div>

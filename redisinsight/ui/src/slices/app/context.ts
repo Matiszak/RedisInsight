@@ -1,29 +1,50 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
+import { EuiComboBoxOptionOption } from '@elastic/eui'
 import { RelativeWidthSizes } from 'uiSrc/components/virtual-table/interfaces'
-import { ConfigDBStorageItem } from 'uiSrc/constants/storage'
-import { Nullable } from 'uiSrc/utils'
+import { CapabilityStorageItem, ConfigDBStorageItem } from 'uiSrc/constants/storage'
+import { Maybe, Nullable } from 'uiSrc/utils'
 import {
   BrowserStorageItem,
   DEFAULT_DELIMITER,
-  DEFAULT_SLOWLOG_DURATION_UNIT,
-  KeyTypes,
   DEFAULT_SHOW_HIDDEN_RECOMMENDATIONS,
-  SortOrder,
+  DEFAULT_SLOWLOG_DURATION_UNIT,
   DEFAULT_TREE_SORTING,
+  KeyTypes, Pages,
+  SortOrder,
+  BrowserColumns,
+  DEFAULT_SHOWN_COLUMNS,
 } from 'uiSrc/constants'
-import { localStorageService, setDBConfigStorageField } from 'uiSrc/services'
-import { RootState } from '../store'
-import { RedisResponseBuffer, StateAppContext } from '../interfaces'
+import { localStorageService, setCapabilityStorageField, setDBConfigStorageField } from 'uiSrc/services'
+import { clearExpertChatHistory } from 'uiSrc/slices/panels/aiAssistant'
+import { resetKeys, resetPatternKeysData } from 'uiSrc/slices/browser/keys'
+import { setMonitorInitialState } from 'uiSrc/slices/cli/monitor'
+import { setInitialPubSubState } from 'uiSrc/slices/pubsub/pubsub'
+import { resetBulkActions } from 'uiSrc/slices/browser/bulkActions'
+import { resetCliHelperSettings } from 'uiSrc/slices/cli/cli-settings'
+import { resetRedisearchKeysData, setRedisearchInitialState } from 'uiSrc/slices/browser/redisearch'
+import { setClusterDetailsInitialState } from 'uiSrc/slices/analytics/clusterDetails'
+import { setDatabaseAnalysisInitialState } from 'uiSrc/slices/analytics/dbAnalysis'
+import { setInitialAnalyticsSettings } from 'uiSrc/slices/analytics/settings'
+import { setInitialRecommendationsState } from 'uiSrc/slices/recommendations/recommendations'
+import { setPipelineConfig, setPipelineInitialState, setPipelineJobs } from 'uiSrc/slices/rdi/pipeline'
+import { resetOutput } from 'uiSrc/slices/cli/cli-output'
 import { SearchMode } from '../interfaces/keys'
+import { AppWorkspace, RedisResponseBuffer, StateAppContext } from '../interfaces'
+import { AppDispatch, RootState } from '../store'
 
 export const initialState: StateAppContext = {
+  workspace: localStorageService.get(BrowserStorageItem.homePage) === Pages.rdi
+    ? AppWorkspace.RDI
+    : AppWorkspace.Databases,
   contextInstanceId: '',
+  contextRdiInstanceId: '',
   lastPage: '',
   dbConfig: {
-    treeViewDelimiter: DEFAULT_DELIMITER,
+    treeViewDelimiter: [DEFAULT_DELIMITER],
     treeViewSort: DEFAULT_TREE_SORTING,
     slowLogDurationUnit: DEFAULT_SLOWLOG_DURATION_UNIT,
     showHiddenRecommendations: DEFAULT_SHOW_HIDDEN_RECOMMENDATIONS,
+    shownColumns: DEFAULT_SHOWN_COLUMNS,
   },
   dbIndex: {
     disabled: false
@@ -39,7 +60,6 @@ export const initialState: StateAppContext = {
     },
     panelSizes: {},
     tree: {
-      delimiter: DEFAULT_DELIMITER,
       openNodes: {},
       selectedLeaf: null,
     },
@@ -54,11 +74,12 @@ export const initialState: StateAppContext = {
   },
   workbench: {
     script: '',
-    enablementArea: {
-      isMinimized: localStorageService?.get(BrowserStorageItem.isEnablementAreaMinimized) ?? false,
-      search: '',
-      itemScrollTop: 0,
-    },
+    panelSizes: {
+      vertical: {}
+    }
+  },
+  searchAndQuery: {
+    script: '',
     panelSizes: {
       vertical: {}
     }
@@ -70,9 +91,13 @@ export const initialState: StateAppContext = {
   analytics: {
     lastViewedPage: ''
   },
-  triggeredFunctions: {
-    lastViewedPage: ''
-  }
+  capability: {
+    source: ''
+  },
+  pipelineManagement: {
+    lastViewedPage: '',
+    isOpenDialog: true,
+  },
 }
 
 // A slice for recipes
@@ -83,34 +108,49 @@ const appContextSlice = createSlice({
     // don't need to reset instanceId
     setAppContextInitialState: (state) => ({
       ...initialState,
+      workspace: state.workspace,
       browser: {
         ...initialState.browser,
         keyDetailsSizes: state.browser.keyDetailsSizes
       },
-      contextInstanceId: state.contextInstanceId
+      contextInstanceId: state.contextInstanceId,
+      contextRdiInstanceId: state.contextRdiInstanceId,
+      capability: state.capability,
+      pipelineManagement: state.pipelineManagement,
     }),
     // set connected instance
     setAppContextConnectedInstanceId: (state, { payload }: { payload: string }) => {
       state.contextInstanceId = payload
     },
+    // set connected rdi instance
+    setAppContextConnectedRdiInstanceId: (state, { payload }: { payload: string }) => {
+      state.contextRdiInstanceId = payload
+    },
+    setCurrentWorkspace: (state, { payload }: PayloadAction<Maybe<AppWorkspace>>) => {
+      state.workspace = payload || AppWorkspace.Databases
+    },
     setDbConfig: (state, { payload }) => {
-      state.dbConfig.treeViewDelimiter = payload?.treeViewDelimiter ?? DEFAULT_DELIMITER
+      state.dbConfig.treeViewDelimiter = payload?.treeViewDelimiter ?? [DEFAULT_DELIMITER]
       state.dbConfig.treeViewSort = payload?.treeViewSort ?? DEFAULT_TREE_SORTING
       state.dbConfig.slowLogDurationUnit = payload?.slowLogDurationUnit ?? DEFAULT_SLOWLOG_DURATION_UNIT
       state.dbConfig.showHiddenRecommendations = payload?.showHiddenRecommendations
-        ?? DEFAULT_SHOW_HIDDEN_RECOMMENDATIONS
+      state.dbConfig.shownColumns = payload?.shownColumns ?? DEFAULT_SHOWN_COLUMNS
     },
     setSlowLogUnits: (state, { payload }) => {
       state.dbConfig.slowLogDurationUnit = payload
       setDBConfigStorageField(state.contextInstanceId, ConfigDBStorageItem.slowLogDurationUnit, payload)
     },
-    setBrowserTreeDelimiter: (state, { payload }: { payload: string }) => {
-      state.dbConfig.treeViewDelimiter = payload
+    setBrowserTreeDelimiter: (state, { payload }: { payload: EuiComboBoxOptionOption[] }) => {
+      state.dbConfig.treeViewDelimiter = payload as any
       setDBConfigStorageField(state.contextInstanceId, BrowserStorageItem.treeViewDelimiter, payload)
     },
     setBrowserTreeSort: (state, { payload }: PayloadAction<SortOrder>) => {
       state.dbConfig.treeViewSort = payload
       setDBConfigStorageField(state.contextInstanceId, BrowserStorageItem.treeViewSort, payload)
+    },
+    setBrowserShownColumns: (state, { payload }: PayloadAction<BrowserColumns[]>) => {
+      state.dbConfig.shownColumns = payload
+      setDBConfigStorageField(state.contextInstanceId, BrowserStorageItem.browserShownColumns, payload)
     },
     setRecommendationsShowHidden: (state, { payload }: { payload: boolean }) => {
       state.dbConfig.showHiddenRecommendations = payload
@@ -152,26 +192,14 @@ const appContextSlice = createSlice({
     setWorkbenchVerticalPanelSizes: (state, { payload }: { payload: any }) => {
       state.workbench.panelSizes.vertical = payload
     },
+    setSQVerticalPanelSizes: (state, { payload }: { payload: any }) => {
+      state.searchAndQuery.panelSizes.vertical = payload
+    },
+    setSQScript: (state, { payload }: { payload: any }) => {
+      state.searchAndQuery.script = payload
+    },
     setLastPageContext: (state, { payload }: { payload: string }) => {
       state.lastPage = payload
-    },
-    setWorkbenchEASearch: (state, { payload }: { payload: any }) => {
-      const prevValue = state.workbench.enablementArea.search
-      state.workbench.enablementArea.search = payload
-      if (prevValue !== payload) {
-        state.workbench.enablementArea.itemScrollTop = 0
-      }
-    },
-    setWorkbenchEAItemScrollTop: (state, { payload }: { payload: any }) => {
-      state.workbench.enablementArea.itemScrollTop = payload || 0
-    },
-    resetWorkbenchEASearch: (state) => {
-      state.workbench.enablementArea.search = ''
-      state.workbench.enablementArea.itemScrollTop = 0
-    },
-    setWorkbenchEAMinimized: (state, { payload }) => {
-      state.workbench.enablementArea.isMinimized = payload
-      localStorageService.set(BrowserStorageItem.isEnablementAreaMinimized, payload)
     },
     resetBrowserTree: (state) => {
       state.browser.tree.selectedLeaf = null
@@ -198,9 +226,25 @@ const appContextSlice = createSlice({
     setDbIndexState: (state, { payload }: { payload: boolean }) => {
       state.dbIndex.disabled = payload
     },
-    setLastTriggeredFunctionsPage: (state, { payload }: { payload: string }) => {
-      state.triggeredFunctions.lastViewedPage = payload
+    setCapability: (state, { payload }: PayloadAction<Maybe<{ source: string, tutorialPopoverShown: boolean }>>) => {
+      const source = payload?.source ?? ''
+      const tutorialPopoverShown = !!payload?.tutorialPopoverShown
+
+      state.capability.source = source
+
+      setCapabilityStorageField(CapabilityStorageItem.source, source)
+      setCapabilityStorageField(CapabilityStorageItem.tutorialPopoverShown, tutorialPopoverShown)
     },
+    setLastPipelineManagementPage: (state, { payload }: { payload: string }) => {
+      state.pipelineManagement.lastViewedPage = payload
+    },
+    setPipelineDialogState: (state, { payload }: { payload: boolean }) => {
+      state.pipelineManagement.isOpenDialog = payload
+    },
+    resetPipelineManagement: (state) => {
+      state.pipelineManagement.lastViewedPage = ''
+      state.pipelineManagement.isOpenDialog = true
+    }
   },
 })
 
@@ -208,6 +252,8 @@ const appContextSlice = createSlice({
 export const {
   setAppContextInitialState,
   setAppContextConnectedInstanceId,
+  setAppContextConnectedRdiInstanceId,
+  setCurrentWorkspace,
   setDbConfig,
   setSlowLogUnits,
   setBrowserPatternKeyListDataLoaded,
@@ -222,11 +268,9 @@ export const {
   resetBrowserTree,
   setWorkbenchScript,
   setWorkbenchVerticalPanelSizes,
+  setSQVerticalPanelSizes,
+  setSQScript,
   setLastPageContext,
-  setWorkbenchEASearch,
-  resetWorkbenchEASearch,
-  setWorkbenchEAMinimized,
-  setWorkbenchEAItemScrollTop,
   setPubSubFieldsContext,
   setBrowserBulkActionOpen,
   setLastAnalyticsPage,
@@ -234,8 +278,12 @@ export const {
   clearBrowserKeyListData,
   setDbIndexState,
   setRecommendationsShowHidden,
-  setLastTriggeredFunctionsPage,
   setBrowserTreeSort,
+  setCapability,
+  setLastPipelineManagementPage,
+  setPipelineDialogState,
+  resetPipelineManagement,
+  setBrowserShownColumns,
 } = appContextSlice.actions
 
 // Selectors
@@ -251,18 +299,20 @@ export const appContextBrowserKeyDetails = (state: RootState) =>
   state.app.context.browser.keyDetailsSizes
 export const appContextWorkbench = (state: RootState) =>
   state.app.context.workbench
+export const appContextSearchAndQuery = (state: RootState) =>
+  state.app.context.searchAndQuery
 export const appContextSelectedKey = (state: RootState) =>
   state.app.context.browser.keyList.selectedKey
-export const appContextWorkbenchEA = (state: RootState) =>
-  state.app.context.workbench.enablementArea
 export const appContextPubSub = (state: RootState) =>
   state.app.context.pubsub
 export const appContextAnalytics = (state: RootState) =>
   state.app.context.analytics
 export const appContextDbIndex = (state: RootState) =>
   state.app.context.dbIndex
-export const appContextTriggeredFunctions = (state: RootState) =>
-  state.app.context.triggeredFunctions
+export const appContextCapability = (state: RootState) =>
+  state.app.context.capability
+export const appContextPipelineManagement = (state: RootState) =>
+  state.app.context.pipelineManagement
 
 // The reducer
 export default appContextSlice.reducer
@@ -275,4 +325,36 @@ export function setBrowserKeyListDataLoaded(
   return searchMode === SearchMode.Pattern
     ? setBrowserPatternKeyListDataLoaded(value)
     : setBrowserRedisearchKeyListDataLoaded(value)
+}
+
+export function resetDatabaseContext() {
+  return async (dispatch: AppDispatch) => {
+    dispatch(resetKeys())
+    dispatch(setMonitorInitialState())
+    dispatch(setInitialPubSubState())
+    dispatch(resetBulkActions())
+    dispatch(setAppContextInitialState())
+    dispatch(resetPatternKeysData())
+    dispatch(resetCliHelperSettings())
+    dispatch(resetRedisearchKeysData())
+    dispatch(setClusterDetailsInitialState())
+    dispatch(setDatabaseAnalysisInitialState())
+    dispatch(setInitialAnalyticsSettings())
+    dispatch(setRedisearchInitialState())
+    dispatch(setInitialRecommendationsState())
+    dispatch(clearExpertChatHistory())
+    setTimeout(() => {
+      dispatch(resetOutput())
+    }, 0)
+  }
+}
+
+export function resetRdiContext() {
+  return async (dispatch: AppDispatch) => {
+    dispatch(setAppContextConnectedRdiInstanceId(''))
+    dispatch(setPipelineInitialState())
+    dispatch(setPipelineConfig(''))
+    dispatch(setPipelineJobs([]))
+    dispatch(resetPipelineManagement())
+  }
 }

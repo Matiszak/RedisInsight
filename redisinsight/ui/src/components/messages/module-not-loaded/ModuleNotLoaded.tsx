@@ -1,27 +1,29 @@
-import React, { useCallback, useContext, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import cx from 'classnames'
-import {
-  EuiTextColor,
-  EuiText,
-  EuiTitle,
-  EuiLink,
-  EuiButton,
-  EuiIcon,
-} from '@elastic/eui'
+import { EuiButton, EuiIcon, EuiLink, EuiText, EuiTextColor, EuiTitle } from '@elastic/eui'
 import { useSelector } from 'react-redux'
 
-import { ReactComponent as MobileIcon } from 'uiSrc/assets/img/icons/mobile_module_not_loaded.svg'
-import { ReactComponent as DesktopIcon } from 'uiSrc/assets/img/icons/module_not_loaded.svg'
-import { ReactComponent as TelescopeDark } from 'uiSrc/assets/img/telescope-dark.svg'
-import { ReactComponent as TelescopeLight } from 'uiSrc/assets/img/telescope-light.svg'
-import { ReactComponent as CheerIcon } from 'uiSrc/assets/img/icons/cheer.svg'
-import { MODULE_NOT_LOADED_CONTENT as CONTENT, MODULE_TEXT_VIEW, Theme } from 'uiSrc/constants'
-import { RedisDefaultModules, OAuthSocialSource } from 'uiSrc/slices/interfaces'
-import { OAuthConnectFreeDb, OAuthSsoHandlerDialog } from 'uiSrc/components'
-import { freeInstanceSelector } from 'uiSrc/slices/instances/instances'
-import { ThemeContext } from 'uiSrc/contexts/themeContext'
+import MobileIcon from 'uiSrc/assets/img/icons/mobile_module_not_loaded.svg?react'
+import DesktopIcon from 'uiSrc/assets/img/icons/module_not_loaded.svg?react'
+import TelescopeImg from 'uiSrc/assets/img/telescope-dark.svg?react'
+import CheerIcon from 'uiSrc/assets/img/icons/cheer.svg?react'
+import { FeatureFlags, MODULE_NOT_LOADED_CONTENT as CONTENT, MODULE_TEXT_VIEW } from 'uiSrc/constants'
+import { OAuthSocialAction, OAuthSocialSource, RedisDefaultModules } from 'uiSrc/slices/interfaces'
+import { FeatureFlagComponent, OAuthConnectFreeDb, OAuthSsoHandlerDialog } from 'uiSrc/components'
+import { freeInstancesSelector } from 'uiSrc/slices/instances/instances'
+import { getUtmExternalLink } from 'uiSrc/utils/links'
 
+import { EXTERNAL_LINKS, UTM_CAMPAINGS } from 'uiSrc/constants/links'
+import { getDbWithModuleLoaded } from 'uiSrc/utils'
+import { useCapability } from 'uiSrc/services'
 import styles from './styles.module.scss'
+
+export const MODULE_OAUTH_SOURCE_MAP: { [key in RedisDefaultModules]?: String } = {
+  [RedisDefaultModules.Bloom]: 'RedisBloom',
+  [RedisDefaultModules.ReJSON]: 'RedisJSON',
+  [RedisDefaultModules.Search]: 'RediSearch',
+  [RedisDefaultModules.TimeSeries]: 'RedisTimeSeries',
+}
 
 export interface IProps {
   moduleName: RedisDefaultModules
@@ -36,7 +38,7 @@ const MAX_ELEMENT_WIDTH = 1440
 const renderTitle = (width: number, moduleName?: string) => (
   <EuiTitle size="m" className={styles.title} data-testid="welcome-page-title">
     <h4>
-      {`${moduleName} ${moduleName === MODULE_TEXT_VIEW.redisgears ? 'are' : 'is'} not available `}
+      {`${moduleName} ${[MODULE_TEXT_VIEW.redisgears, MODULE_TEXT_VIEW.bf].includes(moduleName) ? 'are' : 'is'} not available `}
       {width > MAX_ELEMENT_WIDTH && <br />}
       for this database
     </h4>
@@ -54,10 +56,14 @@ const ListItem = ({ item }: { item: string }) => (
 
 const ModuleNotLoaded = ({ moduleName, id, type = 'workbench', onClose }: IProps) => {
   const [width, setWidth] = useState(0)
-  const freeInstance = useSelector(freeInstanceSelector)
-  const { theme } = useContext(ThemeContext)
+  const freeInstances = useSelector(freeInstancesSelector) || []
 
-  const module = MODULE_TEXT_VIEW[moduleName]
+  const module = MODULE_OAUTH_SOURCE_MAP[moduleName]
+
+  const freeDbWithModule = getDbWithModuleLoaded(freeInstances, moduleName)
+  const source = type === 'browser' ? OAuthSocialSource.BrowserSearch : OAuthSocialSource[module]
+
+  useCapability(source)
 
   useEffect(() => {
     const parentEl = document?.getElementById(id)
@@ -66,31 +72,23 @@ const ModuleNotLoaded = ({ moduleName, id, type = 'workbench', onClose }: IProps
     }
   })
 
-  const getStartedLink = (baseUrl: string) => {
-    try {
-      const url = new URL(baseUrl)
-      url.searchParams.append('utm_source', 'redisinsight')
-      url.searchParams.append('utm_medium', 'app')
-      url.searchParams.append('utm_campaign', type === 'browser' ? 'redisinsight_browser_search' : 'redisinsight_workbench')
-      return url.toString()
-    } catch (e) {
-      return baseUrl
-    }
-  }
-
-  const renderText = useCallback((moduleName?: string) => (!freeInstance ? (
+  const renderText = useCallback((moduleName?: string) => (!freeDbWithModule ? (
     <EuiText className={cx(styles.text, styles.marginBottom)}>
-      {`Create a free Redis Stack database with ${moduleName} which extends the core capabilities of open-source Redis`}
+      {`Create a free trial Redis Stack database with ${moduleName} which extends the core capabilities of your Redis`}
     </EuiText>
   ) : (
     <EuiText className={cx(styles.text, styles.marginBottom, styles.textFooter)}>
-      Use your free all-in-one Redis Cloud database to start exploring these capabilities.
+      Use your free trial all-in-one Redis Cloud database to start exploring these capabilities.
     </EuiText>
-  )), [freeInstance])
+  )), [freeDbWithModule])
 
   const onFreeDatabaseClick = () => {
     onClose?.()
   }
+
+  const utmCampaign = type === 'browser'
+    ? UTM_CAMPAINGS[OAuthSocialSource.BrowserSearch]
+    : UTM_CAMPAINGS[OAuthSocialSource.Workbench]
 
   return (
     <div className={cx(styles.container, {
@@ -108,13 +106,13 @@ const ModuleNotLoaded = ({ moduleName, id, type = 'workbench', onClose }: IProps
           {type === 'browser' && (
             <EuiIcon
               className={styles.iconTelescope}
-              type={theme === Theme.Dark ? TelescopeDark : TelescopeLight}
+              type={TelescopeImg}
               size="original"
             />
           )}
         </div>
         <div className={styles.contentWrapper}>
-          {renderTitle(width, module)}
+          {renderTitle(width, MODULE_TEXT_VIEW[moduleName])}
           <EuiText className={styles.bigText}>
             {CONTENT[moduleName]?.text.map((item: string) => (
               width > MIN_ELEMENT_WIDTH ? <>{item}<br /></> : item
@@ -132,58 +130,64 @@ const ModuleNotLoaded = ({ moduleName, id, type = 'workbench', onClose }: IProps
               ))}
             </EuiText>
           )}
-          {renderText(module)}
+          {renderText(MODULE_TEXT_VIEW[moduleName])}
         </div>
       </div>
       <div className={styles.linksWrapper}>
-        {!!freeInstance && (
+        {!!freeDbWithModule && (
           <OAuthConnectFreeDb
-            source={type === 'browser' ? OAuthSocialSource.BrowserSearch : OAuthSocialSource[module]}
+            source={source}
+            id={freeDbWithModule.id}
           />
         )}
-        {!freeInstance && (
-          <>
-            <EuiLink
-              className={cx(styles.text, styles.link)}
-              external={false}
-              target="_blank"
-              href={getStartedLink(CONTENT[moduleName]?.link)}
-              data-testid="learn-more-link"
-            >
-              Learn More
-            </EuiLink>
-            <OAuthSsoHandlerDialog>
-              {(ssoCloudHandlerClick) => (
-                <EuiLink
-                  className={styles.link}
-                  external={false}
-                  target="_blank"
-                  href={getStartedLink('https://redis.com/try-free')}
-                  onClick={(e) => {
-                    ssoCloudHandlerClick(
-                      e,
-                      type === 'browser' ? OAuthSocialSource.BrowserSearch : OAuthSocialSource[module]
-                    )
-                    onFreeDatabaseClick()
-                  }}
-                  data-testid="get-started-link"
-                >
-                  <EuiButton
-                    fill
-                    size="s"
-                    color="secondary"
-                    className={styles.btnLink}
+        {!freeDbWithModule && (
+          <FeatureFlagComponent name={FeatureFlags.envDependent}>
+            <>
+              <EuiLink
+                className={cx(styles.text, styles.link)}
+                external={false}
+                target="_blank"
+                href={getUtmExternalLink(CONTENT[moduleName]?.link, { campaign: utmCampaign })}
+                data-testid="learn-more-link"
+              >
+                Learn More
+              </EuiLink>
+              <OAuthSsoHandlerDialog>
+                {(ssoCloudHandlerClick) => (
+                  <EuiLink
+                    className={styles.link}
+                    external={false}
+                    target="_blank"
+                    href={getUtmExternalLink(EXTERNAL_LINKS.tryFree, { campaign: utmCampaign })}
+                    onClick={(e) => {
+                      ssoCloudHandlerClick(
+                        e,
+                        {
+                          source: type === 'browser' ? OAuthSocialSource.BrowserSearch : OAuthSocialSource[module],
+                          action: OAuthSocialAction.Create
+                        }
+                      )
+                      onFreeDatabaseClick()
+                    }}
+                    data-testid="get-started-link"
                   >
-                    Get Started For Free
-                  </EuiButton>
-                </EuiLink>
-              )}
-            </OAuthSsoHandlerDialog>
-          </>
+                    <EuiButton
+                      fill
+                      size="s"
+                      color="secondary"
+                      className={styles.btnLink}
+                    >
+                      Get Started For Free
+                    </EuiButton>
+                  </EuiLink>
+                )}
+              </OAuthSsoHandlerDialog>
+            </>
+          </FeatureFlagComponent>
         )}
       </div>
     </div>
   )
 }
 
-export default ModuleNotLoaded
+export default React.memo(ModuleNotLoaded)

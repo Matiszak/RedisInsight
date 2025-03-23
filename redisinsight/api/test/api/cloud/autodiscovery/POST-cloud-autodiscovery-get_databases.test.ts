@@ -59,6 +59,7 @@ const responseSchema = Joi.array().items(Joi.object().keys({
     subscriptionType: Joi.string().valid('fixed', 'flexible').required(),
     planMemoryLimit: Joi.number(),
     memoryLimitMeasurementUnit: Joi.string(),
+    subscriptionId: Joi.number().integer(),
     free: Joi.boolean().required(),
   }).required(),
 })).required();
@@ -90,7 +91,7 @@ describe('POST /cloud/autodiscovery/get-databases', () => {
         headers,
         responseSchema,
         checkFn: ({ body }) => {
-          expect(body).to.deep.eq([mockCloudDatabaseFromList]);
+          expect(body).to.deepEqualIgnoreUndefined([mockCloudDatabaseFromList]);
         },
       },
       {
@@ -105,13 +106,13 @@ describe('POST /cloud/autodiscovery/get-databases', () => {
         headers,
         responseSchema,
         checkFn: ({ body }) => {
-          expect(body).to.deep.eq([mockCloudDatabaseFromListFixed]);
+          expect(body).to.deepEqualIgnoreUndefined([mockCloudDatabaseFromListFixed]);
         },
       },
       {
         before: () => {
           nockScope.get(`/subscriptions/${mockGetCloudSubscriptionDatabasesDto.subscriptionId}/databases`)
-            .reply(403, {
+            .replyWithError({
               response: {
                 status: 403,
                 data: { message: 'Unauthorized for this action' },
@@ -127,14 +128,14 @@ describe('POST /cloud/autodiscovery/get-databases', () => {
         responseBody: {
           statusCode: 403,
           error: 'CloudApiForbidden',
-          message: ERROR_MESSAGES.CLOUD_API_FORBIDDEN,
+          message: 'Unauthorized for this action',
           errorCode: CustomErrorCodes.CloudApiForbidden,
         },
       },
       {
         before: () => {
           nockScope.get(`/subscriptions/${mockGetCloudSubscriptionDatabasesDto.subscriptionId}/databases`)
-            .reply(401, {
+            .replyWithError({
               response: {
                 status: 401,
                 data: '',
@@ -151,13 +152,13 @@ describe('POST /cloud/autodiscovery/get-databases', () => {
           statusCode: 401,
           error: 'CloudCapiUnauthorized',
           errorCode: CustomErrorCodes.CloudCapiUnauthorized,
-          message:  ERROR_MESSAGES.CLOUD_CAPI_UNAUTHORIZED,
+          message:  ERROR_MESSAGES.UNAUTHORIZED,
         },
       },
       {
         before: () => {
           nockScope.get(`/subscriptions/${mockGetCloudSubscriptionDatabasesDto.subscriptionId}/databases`)
-            .reply(404, {
+            .replyWithError({
               response: {
                 status: 404,
                 data: 'Subscription is not found',
@@ -173,7 +174,7 @@ describe('POST /cloud/autodiscovery/get-databases', () => {
         responseBody: {
           statusCode: 404,
           error: 'CloudApiNotFound',
-          message: ERROR_MESSAGES.CLOUD_API_NOT_FOUND,
+          message: ERROR_MESSAGES.NOT_FOUND,
           errorCode: CustomErrorCodes.CloudApiNotFound,
         },
       },

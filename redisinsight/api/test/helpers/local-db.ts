@@ -20,6 +20,7 @@ export const repositories = {
   FEATURES_CONFIG: 'FeaturesConfigEntity',
   FEATURE: 'FeatureEntity',
   CLOUD_DATABASE_DETAILS: 'CloudDatabaseDetailsEntity',
+  RDI: 'RdiEntity',
 }
 
 let localDbConnection;
@@ -107,18 +108,9 @@ export const generateNCommandExecutions = async (
       result: encryptData(JSON.stringify([{
         status: 'success',
         response: `"OK_${i}"`,
-        node: {
-          host: 'localhost',
-          port: 6479,
-          slot: 12499
-        }
       }])),
-      nodeOptions: JSON.stringify({
-        host: 'localhost',
-        port: 6479,
-        enableRedirection: true,
-      }),
-      role: 'ALL',
+      nodeOptions: null,
+      role: null,
       mode: 'ASCII',
       encryption: constants.TEST_ENCRYPTION_STRATEGY,
       executionTime: Math.round(Math.random() * 10000),
@@ -206,6 +198,40 @@ export const generatePluginState = async (
     createdAt: new Date(),
     ...partial,
   })
+}
+
+export const generateRdis = async(
+  partial: Record<string, any>,
+  number: number = 2,
+  truncate: boolean = false,
+) => {
+  const result = [];
+  const rep = await getRepository(repositories.RDI)
+
+  if (truncate) {
+    await rep.clear();
+  }
+
+  for (let i = 0; i < number; i++) {
+    result.push(await rep.save({
+      id: uuidv4(),
+      url: 'http://localhost:4000',
+      name: 'Rdi',
+      username: 'Rdi Username',
+      password: encryptData(constants.TEST_KEYTAR_PASSWORD),
+      lastConnection: new Date(),
+      version: '1.2',
+      encryption: constants.TEST_ENCRYPTION_STRATEGY,
+      ...partial
+    }))
+  }
+
+  return result;
+}
+
+export const getRdiById = async (id: string) => {
+  const rep = await getRepository(repositories.RDI);
+  return rep.findOneBy({ id });
 }
 
 export const generateBrowserHistory = async (
@@ -307,6 +333,29 @@ const createClientCertificate = async (certificate) => {
   return rep.save(certificate);
 }
 
+/**
+ * Remove all pre setup databases and certificates
+ */
+export const cleanupPreSetupDatabases = async () => {
+  const databaseRepository = await getRepository(repositories.DATABASE);
+  await databaseRepository.createQueryBuilder()
+    .delete()
+    .where({ isPreSetup: true })
+    .execute();
+
+  const caCertificateRepository = await getRepository(repositories.CA_CERT_REPOSITORY);
+  await caCertificateRepository.createQueryBuilder()
+    .delete()
+    .where({ isPreSetup: true })
+    .execute();
+
+  const clientCertificateRepository = await getRepository(repositories.CLIENT_CERT_REPOSITORY);
+  await clientCertificateRepository.createQueryBuilder()
+    .delete()
+    .where({ isPreSetup: true })
+    .execute();
+}
+
 export const createTestDbInstance = async (rte, server, data: any = {}): Promise<void> => {
   const rep = await getRepository(repositories.DATABASE);
 
@@ -380,17 +429,20 @@ export const createDatabaseInstances = async () => {
       name: constants.TEST_INSTANCE_NAME_2,
       host: constants.TEST_INSTANCE_HOST_2,
       db: constants.TEST_REDIS_DB_INDEX,
+      timeout: 30000,
     },
     {
       id: constants.TEST_INSTANCE_ID_3,
       name: constants.TEST_INSTANCE_NAME_3,
       host: constants.TEST_INSTANCE_HOST_3,
+      timeout: 30000,
     },
     {
       id: constants.TEST_INSTANCE_ID_4,
       name: constants.TEST_INSTANCE_NAME_4,
       host: constants.TEST_INSTANCE_HOST_4,
       port: constants.TEST_INSTANCE_PORT_4,
+      timeout: 30000,
     }
   ];
 
@@ -423,6 +475,7 @@ export const createIncorrectDatabaseInstances = async () => {
     password: constants.TEST_INCORRECT_PASSWORD,
     modules: '[]',
     version: '7.0',
+    timeout: 30000,
   });
 }
 
@@ -439,6 +492,7 @@ export const createAclInstance = async (rte, server): Promise<void> => {
     tls: false,
     verifyServerCert: false,
     connectionType: rte.env.type,
+    timeout: 30000,
   }
 
   if (rte.env.type === constants.CLUSTER) {
@@ -590,6 +644,8 @@ export const setAppSettings = async (data: object) => {
 
 const truncateAll = async () => {
   await (await getRepository(repositories.DATABASE)).clear();
+  await (await getRepository(repositories.FEATURE)).clear();
+  await (await getRepository(repositories.FEATURES_CONFIG)).clear();
   await (await getRepository(repositories.CA_CERT_REPOSITORY)).clear();
   await (await getRepository(repositories.CLIENT_CERT_REPOSITORY)).clear();
   await (await getRepository(repositories.CUSTOM_TUTORIAL)).clear();

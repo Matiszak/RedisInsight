@@ -1,11 +1,12 @@
 import contextMenu from 'electron-context-menu'
-import { BrowserWindow } from 'electron'
+import { BrowserWindow, Rectangle } from 'electron'
 import { v4 as uuidv4 } from 'uuid'
 
 import { IParsedDeepLink } from 'desktopSrc/lib/app/deep-link.handlers'
 import { configMain as config } from 'desktopSrc/config'
-import { updateTray } from 'desktopSrc/lib'
-import { resolveHtmlPath } from 'desktopSrc/utils'
+import { electronStore, updateTray } from 'desktopSrc/lib'
+import { resolveHtmlPath, getFittedBounds } from 'desktopSrc/utils'
+import { ElectronStorageItem } from 'uiSrc/electron/constants'
 import { initWindowHandlers } from './window.handlers'
 
 export const windows = new Map<string, BrowserWindow>()
@@ -14,6 +15,7 @@ export const focusWindow = (win: BrowserWindow) => {
   if (win.isMinimized()) win.restore()
   win.focus()
 }
+export const NEW_WINDOW_OFFSET = 24
 
 export enum WindowType {
   Splash = 'splash',
@@ -37,17 +39,26 @@ export const createWindow = async ({
 }: ICreateWindow) => {
   let x
   let y
-  const currentWindow = BrowserWindow.getFocusedWindow()
+  let { width, height } = options
 
-  if (currentWindow && currentWindow?.getTitle() !== config.splashWindow.title) {
+  const currentWindow = BrowserWindow.getFocusedWindow()
+  const isNewMainWindow = currentWindow && currentWindow?.getTitle() !== config.splashWindow.title
+
+  if (isNewMainWindow) {
     const [currentWindowX, currentWindowY] = currentWindow.getPosition()
-    x = currentWindowX + 24
-    y = currentWindowY + 24
+    const [currentWindowWidth, currentWindowHeight] = currentWindow?.includeSize()
+    x = currentWindowX + NEW_WINDOW_OFFSET
+    y = currentWindowY + NEW_WINDOW_OFFSET
+    width = currentWindowWidth
+    height = currentWindowHeight
   }
+
   const newWindow: BrowserWindow | null = new BrowserWindow({
     ...options,
     x,
     y,
+    width,
+    height,
     webPreferences: {
       ...options.webPreferences,
       preload: options.preloadPath
@@ -59,7 +70,19 @@ export const createWindow = async ({
     return newWindow
   }
 
-  newWindow.loadURL(resolveHtmlPath(htmlFileName, options?.parsedDeepLink))
+  const savedBounds = electronStore?.get(ElectronStorageItem.bounds)
+  if (!isNewMainWindow && savedBounds) {
+    const bounds = getFittedBounds(savedBounds as Rectangle)
+    if (bounds) {
+      newWindow.setBounds(bounds)
+    }
+  }
+
+  if (config.isDevelopment) {
+    newWindow.loadURL(`http://localhost:8080`)
+  } else {
+    newWindow.loadURL(resolveHtmlPath(htmlFileName, options?.parsedDeepLink))
+  }
 
   initWindowHandlers(newWindow, prevWindow, windows, id)
 
@@ -81,7 +104,7 @@ export const windowFactory = async (
     case WindowType.Splash:
       return createWindow({
         prevWindow,
-        htmlFileName: 'splash.html',
+        htmlFileName: config.isDevelopment ? '../../../splash.html' : 'splash.html',
         windowType,
         options: {
           ...config.splashWindow,
@@ -91,7 +114,7 @@ export const windowFactory = async (
     case WindowType.Main:
       return createWindow({
         prevWindow,
-        htmlFileName: 'index.html',
+        htmlFileName: config.isDevelopment ? '../src/index.html' : 'index.html',
         windowType,
         options: {
           ...options,

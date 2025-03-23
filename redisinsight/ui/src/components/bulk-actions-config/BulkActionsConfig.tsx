@@ -1,36 +1,42 @@
 import { useEffect, useRef } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { io, Socket } from 'socket.io-client'
+import { Socket } from 'socket.io-client'
 
 import {
-  setLoading,
-  setBulkDeleteLoading,
+  bulkActionsDeleteSelector,
   bulkActionsSelector,
   disconnectBulkDeleteAction,
   setBulkActionConnected,
-  setDeleteOverview,
   setBulkActionsInitialState,
-  bulkActionsDeleteSelector,
+  setBulkDeleteLoading,
+  setDeleteOverview,
+  setDeleteOverviewStatus,
+  setLoading,
 } from 'uiSrc/slices/browser/bulkActions'
-import { getBaseApiUrl, Nullable } from 'uiSrc/utils'
+import { getSocketApiUrl, Nullable } from 'uiSrc/utils'
 import { sessionStorageService } from 'uiSrc/services'
 import { keysSelector } from 'uiSrc/slices/browser/keys'
 import { connectedInstanceSelector } from 'uiSrc/slices/instances/instances'
 import { isProcessingBulkAction } from 'uiSrc/pages/browser/components/bulk-actions/utils'
-import { BrowserStorageItem, BulkActionsServerEvent, BulkActionsStatus, BulkActionsType, SocketEvent } from 'uiSrc/constants'
+import {
+  BrowserStorageItem,
+  BulkActionsServerEvent,
+  BulkActionsStatus,
+  BulkActionsType,
+  SocketEvent,
+} from 'uiSrc/constants'
 import { addErrorNotification } from 'uiSrc/slices/app/notifications'
-import { CustomHeaders } from 'uiSrc/constants/api'
+import { appCsrfSelector } from 'uiSrc/slices/app/csrf'
+import { useIoConnection } from 'uiSrc/services/hooks/useIoConnection'
 
-interface IProps {
-  retryDelay?: number
-}
-
-const BulkActionsConfig = ({ retryDelay = 5000 } : IProps) => {
+const BulkActionsConfig = () => {
   const { id: instanceId = '', db } = useSelector(connectedInstanceSelector)
   const { isConnected } = useSelector(bulkActionsSelector)
   const { isActionTriggered: isDeleteTriggered } = useSelector(bulkActionsDeleteSelector)
   const { filter, search } = useSelector(keysSelector)
+  const { token } = useSelector(appCsrfSelector)
   const socketRef = useRef<Nullable<Socket>>(null)
+  const connectIo = useIoConnection(getSocketApiUrl('bulk-actions'), { token, query: { instanceId } })
 
   const dispatch = useDispatch()
 
@@ -40,13 +46,7 @@ const BulkActionsConfig = ({ retryDelay = 5000 } : IProps) => {
     }
 
     let retryTimer: NodeJS.Timer
-
-    socketRef.current = io(`${getBaseApiUrl()}/bulk-actions`, {
-      forceNew: true,
-      query: { instanceId },
-      extraHeaders: { [CustomHeaders.WindowId]: window.windowId || '' },
-      rejectUnauthorized: false,
-    })
+    socketRef.current = connectIo()
 
     socketRef.current.on(SocketEvent.Connect, () => {
       clearTimeout(retryTimer)
@@ -60,11 +60,8 @@ const BulkActionsConfig = ({ retryDelay = 5000 } : IProps) => {
 
     // Catch disconnect
     socketRef.current?.on(SocketEvent.Disconnect, () => {
-      if (retryDelay) {
-        retryTimer = setTimeout(handleDisconnect, retryDelay)
-      } else {
-        handleDisconnect()
-      }
+      dispatch(setDeleteOverviewStatus(BulkActionsStatus.Disconnected))
+      handleDisconnect()
     })
   }, [instanceId, isDeleteTriggered])
 
@@ -147,10 +144,8 @@ const BulkActionsConfig = ({ retryDelay = 5000 } : IProps) => {
   const onBulkDeleteAborted = (data: any) => {
     dispatch(setBulkDeleteLoading(false))
     sessionStorageService.set(BrowserStorageItem.bulkActionDeleteId, '')
-
-    if (data.status === 'aborted') {
-      dispatch(setDeleteOverview(data))
-    }
+    dispatch(setDeleteOverview(data))
+    handleDisconnect()
   }
 
   useEffect(() => {

@@ -1,5 +1,15 @@
 /* eslint-disable max-len */
 export default {
+  UNAUTHORIZED: 'Authorization failed',
+  FORBIDDEN: 'Access denied',
+  BAD_REQUEST: 'Bad request',
+  NOT_FOUND: 'Resource was not found',
+  INTERNAL_SERVER_ERROR: 'Server error',
+  REQUEST_TIMEOUT: 'Request timeout',
+
+  INVALID_CLIENT_METADATA: 'Client metadata missed required properties',
+  INVALID_SESSION_METADATA: 'Session metadata missed required properties',
+
   INVALID_DATABASE_INSTANCE_ID: 'Invalid database instance id.',
   USER_NOT_AUTHENTICATED: 'Application user is not authenticated.',
   NO_ACCESS_TO_DATABASE: 'Access to the database has been denied.',
@@ -12,12 +22,19 @@ export default {
   PLUGIN_STATE_NOT_FOUND: 'Plugin state was not found.',
   CUSTOM_TUTORIAL_NOT_FOUND: 'Custom Tutorial was not found.',
   CUSTOM_TUTORIAL_UNABLE_TO_FETCH_FROM_EXTERNAL: 'Unable fetch zip file from external source.',
+  CUSTOM_TUTORIAL_UNSUPPORTED_ORIGIN: 'Unsupported origin for tutorial.',
   UNDEFINED_INSTANCE_ID: 'Undefined redis database instance id.',
   NO_CONNECTION_TO_REDIS_DB: 'No connection to the Redis Database.',
   WRONG_DATABASE_TYPE: 'Wrong database type.',
   CONNECTION_TIMEOUT:
     'The connection has timed out, please check the connection details.',
+  DB_CONNECTION_TIMEOUT:
+    'The connection timed out. Try increasing the timeout in the connection settings.',
+  DB_CLUSTER_CONNECT_FAILED:
+    'Redis Insight requires connectivity to all nodes of your clustered database. Ensure all nodes are accessible or increase the timeout.',
   SERVER_CLOSED_CONNECTION: 'Server closed the connection.',
+  UNABLE_TO_ESTABLISH_CONNECTION: 'Unable to establish connection.',
+  RECONNECTING_TO_DATABASE: 'Reconnecting to the redis database.',
   AUTHENTICATION_FAILED: () => 'Failed to authenticate, please check the username or password.',
   INCORRECT_DATABASE_URL: (url) => `Could not connect to ${url}, please check the connection details.`,
   INCORRECT_CERTIFICATES: (url) => `Could not connect to ${url}, please check the CA or Client certificate.`,
@@ -57,11 +74,11 @@ export default {
   SCAN_PER_KEY_TYPE_NOT_SUPPORT: () => 'Filtering per Key types is available for Redis databases v. 6.0 or later.',
   WRONG_DISCOVERY_TOOL: () => 'Selected discovery tool is incorrect, please add this database manually using Host and Port.',
   COMMAND_NOT_SUPPORTED: (command: string) => `Redis does not support '${command}' command.`,
-  PLUGIN_COMMAND_NOT_SUPPORTED: (command: string) => `Plugin ERROR: The '${command}' command is not allowed by the RedisInsight Plugins.`,
+  PLUGIN_COMMAND_NOT_SUPPORTED: (command: string) => `Plugin ERROR: The '${command}' command is not allowed by the Redis Insight Plugins.`,
   PLUGIN_STATE_MAX_SIZE: (size: number) => `State should be less then ${size} bytes.`,
-  WORKBENCH_COMMAND_NOT_SUPPORTED: (command) => `Workbench ERROR: The '${command}' command is not supported by the RedisInsight Workbench.`,
+  WORKBENCH_COMMAND_NOT_SUPPORTED: (command) => `Workbench ERROR: The '${command}' command is not supported by the Redis Insight Workbench.`,
   WORKBENCH_RESPONSE_TOO_BIG: () => 'Results have been deleted since they exceed 1 MB. Re-run the command to see new results.',
-  CLI_COMMAND_NOT_SUPPORTED: (command: string) => `CLI ERROR: The '${command}' command is not supported by the RedisInsight CLI.`,
+  CLI_COMMAND_NOT_SUPPORTED: (command: string) => `CLI ERROR: The '${command}' command is not supported by the Redis Insight CLI.`,
   CLI_UNTERMINATED_QUOTES: () => 'Invalid argument(s): Unterminated quotes.',
   CLI_INVALID_QUOTES_CLOSING: () => 'Invalid argument(s): Closing quote must be followed by a space or nothing at all.',
   CLUSTER_NODE_NOT_FOUND: (node: string) => `Node ${node} not exist in OSS Cluster.`,
@@ -73,18 +90,14 @@ export default {
   UNDEFINED_WINDOW_ID: 'Undefined window id.',
   LIBRARY_NOT_EXIST: 'This library does not exist.',
 
-  CLOUD_CAPI_UNAUTHORIZED: 'Authorization failed',
   CLOUD_CAPI_KEY_UNAUTHORIZED: 'Unable to authorize such CAPI key',
-  CLOUD_API_UNAUTHORIZED: 'Authorization failed',
-  CLOUD_API_FORBIDDEN: 'Access denied',
-  CLOUD_API_BAD_REQUEST: 'Bad request',
-  CLOUD_API_NOT_FOUND: 'Resource was not found',
-  CLOUD_API_INTERNAL_SERVER_ERROR: 'Server error',
 
+  CLOUD_OAUTH_CANCELED: 'Authorization request was canceled.',
   CLOUD_OAUTH_MISCONFIGURATION: 'Authorization server misconfiguration.',
   CLOUD_OAUTH_GITHUB_EMAIL_PERMISSION: 'Unable to get an email from the GitHub account. Make sure that it is available.',
+  CLOUD_OAUTH_SSO_UNSUPPORTED_EMAIL: 'Invalid email.',
   CLOUD_OAUTH_MISSED_REQUIRED_DATA: 'Unable to get required data from the user profile.',
-  CLOUD_OAUTH_GITHUB_UNKNOWN_AUTHORIZATION_REQUEST: 'Unknown authorization request.',
+  CLOUD_OAUTH_UNKNOWN_AUTHORIZATION_REQUEST: 'Unknown authorization request.',
   CLOUD_OAUTH_UNEXPECTED_ERROR: 'Unexpected error.',
 
   CLOUD_JOB_UNEXPECTED_ERROR: 'Unexpected error occurred',
@@ -99,7 +112,22 @@ export default {
   CLOUD_TASK_NOT_FOUND: 'Cloud task was not found',
   CLOUD_DATABASE_IN_FAILED_STATE: 'Cloud database is in the failed state',
   CLOUD_DATABASE_IN_UNEXPECTED_STATE: 'Cloud database is in unexpected state',
-  CLOUD_DATABASE_ALREADY_EXISTS_FREE: 'Free database already exists',
+  CLOUD_DATABASE_ALREADY_EXISTS_FREE: 'Free trial database already exists',
   CLOUD_PLAN_NOT_FOUND_FREE: 'Unable to find free cloud plan',
   CLOUD_SUBSCRIPTION_ALREADY_EXISTS_FREE: 'Free subscription already exists',
+  COMMON_DEFAULT_IMPORT_ERROR: 'Unable to import default data',
+  AI_QUERY_REQUEST_RATE_LIMIT: 'Exceeded limit for requests',
+  AI_QUERY_TOKEN_RATE_LIMIT: 'Exceeded limit for characters in the conversation',
+  AI_QUERY_MAX_TOKENS_RATE_LIMIT: 'Token count exceeds the conversation limit',
+
+  RDI_DEPLOY_PIPELINE_FAILURE: 'Failed to deploy pipeline',
+  RDI_RESET_PIPELINE_FAILURE: 'Failed to reset pipeline',
+  RDI_STOP_PIPELINE_FAILURE: 'Failed to stop pipeline',
+  RDI_START_PIPELINE_FAILURE: 'Failed to start pipeline',
+  RDI_TIMEOUT_ERROR: 'Encountered a timeout error while attempting to retrieve data',
+  RDI_VALIDATION_ERROR: 'Validation error',
+  INVALID_RDI_INSTANCE_ID: 'Invalid rdi instance id.',
+
+  // database settings
+  DATABASE_SETTINGS_NOT_FOUND: 'Could not find settings for this database',
 };

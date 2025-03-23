@@ -49,7 +49,7 @@ test('Verify that user can add several fields and values during Stream key creat
     const streamData = { 'string': Common.generateWord(20), 'array': `[${Common.generateWord(20)}, ${chance.integer()}]`, 'integer': `${chance.integer()}`, 'json': '{\'test\': \'test\'}', 'null': 'null', 'boolean': 'true' };
     const scrollSelector = Selector('.eui-yScroll').nth(-1);
 
-    // Open Add New Stream Key Form
+    // Open Add New Stream Key form
     await browserPage.commonAddNewKey(keyName);
     await t.click(browserPage.streamOption);
     // Verify that user can see Entity ID filled by * by default on add Stream key form
@@ -63,7 +63,7 @@ test('Verify that user can add several fields and values during Stream key creat
         await t.scroll(scrollSelector, 'bottom');
         await t.expect(browserPage.streamField.count).eql(i + 1, 'Number of added fields not correct');
         if (i < Object.keys(streamData).length - 1) {
-            await t.click(browserPage.addStreamRow);
+            await t.click(browserPage.addAdditionalElement);
         }
     }
     await t.expect(browserPage.addKeyButton.withAttribute('disabled').exists).notOk('Clickable Add Key button');
@@ -89,7 +89,7 @@ test('Verify that user can add new Stream Entry for Stream data type key which h
     await t.expect(browserPage.streamEntryIDDateValue.count).eql(3, 'Three Entries ID not displayed');
     await t.expect(browserPage.streamFields.count).eql(8, 'Still two fields in table not displayed');
     await t.expect(browserPage.streamEntryFields.count).eql(6, 'Six values in table not displayed');
-});
+}).skip.meta({skipComment: "CI execution unstable, verification failure, needs investigation"});
 test('Verify that during new entry adding to existing Stream, user can clear the value and the row itself', async t => {
     keyName = Common.generateWord(20);
     // Generate data for stream

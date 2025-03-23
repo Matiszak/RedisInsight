@@ -1,11 +1,10 @@
-process.env.BASE_API_URL = 'http://localhost'
-process.env.RESOURCES_BASE_URL = 'http://localhost'
-process.env.API_PORT = '5001'
-process.env.API_PREFIX = 'api'
+import { defaultConfig } from 'uiSrc/config/default'
+
+riConfig = defaultConfig
 
 window.app = {
   ...window.app,
   config: {
-    apiPort: '5001',
+    apiPort: `${defaultConfig.api.port}`,
   }
 }

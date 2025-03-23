@@ -24,6 +24,14 @@ import {
 import { ValidationException } from 'src/common/exceptions';
 import { CertificateImportService } from 'src/modules/database-import/certificate-import.service';
 import { SshImportService } from 'src/modules/database-import/ssh-import.service';
+import { SessionMetadata } from 'src/common/models';
+
+type ImportFileType = {
+  originalname?: string;
+  mimetype?: string;
+  size?: number;
+  buffer?: Buffer;
+};
 
 @Injectable()
 export class DatabaseImportService {
@@ -63,6 +71,7 @@ export class DatabaseImportService {
     ['sshAgentPath', ['ssh_agent_path']],
     ['compressor', ['compressor']],
     ['modules', ['modules']],
+    ['forceStandalone', ['forceStandalone']],
   ];
 
   constructor(
@@ -74,9 +83,10 @@ export class DatabaseImportService {
 
   /**
    * Import databases from the file
+   * @param sessionMetadata
    * @param file
    */
-  public async import(file): Promise<DatabaseImportResponse> {
+  public async import(sessionMetadata: SessionMetadata, file: ImportFileType): Promise<DatabaseImportResponse> {
     try {
       // todo: create FileValidation class
       if (!file) {
@@ -104,7 +114,7 @@ export class DatabaseImportService {
       };
 
       // it is very important to insert databases on-by-one to avoid db constraint errors
-      await items.reduce((prev, item, index) => prev.finally(() => this.createDatabase(item, index)
+      await items.reduce((prev, item, index) => prev.finally(() => this.createDatabase(sessionMetadata, item, index)
         .then((result) => {
           switch (result.status) {
             case DatabaseImportStatus.Fail:
@@ -123,13 +133,13 @@ export class DatabaseImportService {
 
       response = plainToClass(DatabaseImportResponse, response);
 
-      this.analytics.sendImportResults(response);
+      this.analytics.sendImportResults(sessionMetadata, response);
 
       return response;
     } catch (e) {
-      this.logger.warn(`Unable to import databases: ${e?.constructor?.name || 'UncaughtError'}`, e);
+      this.logger.warn(`Unable to import databases: ${e?.constructor?.name || 'UncaughtError'}`, e, sessionMetadata);
 
-      this.analytics.sendImportFailed(e);
+      this.analytics.sendImportFailed(sessionMetadata, e);
 
       throw e;
     }
@@ -138,11 +148,17 @@ export class DatabaseImportService {
   /**
    * Map data to known model, validate it and create database if possible
    * Note: will not create connection, simply create database
+   * @parama sessionMetadata
+   * @param sessionMetadata
    * @param item
    * @param index
    * @private
    */
-  private async createDatabase(item: any, index: number): Promise<DatabaseImportResult> {
+  private async createDatabase(
+    sessionMetadata: SessionMetadata,
+    item: any,
+    index: number,
+  ): Promise<DatabaseImportResult> {
     try {
       let status = DatabaseImportStatus.Success;
       const errors = [];
@@ -152,7 +168,7 @@ export class DatabaseImportService {
       data.new = true;
 
       this.fieldsMapSchema.forEach(([field, paths]) => {
-        let value;
+        let value: any;
         paths.every((path) => {
           value = get(item, path);
           return value === undefined;
@@ -243,7 +259,7 @@ export class DatabaseImportService {
 
       const database = classToClass(Database, dto);
 
-      await this.databaseRepository.create(database, false);
+      await this.databaseRepository.create(sessionMetadata, database, false);
 
       return {
         index,
@@ -271,7 +287,8 @@ export class DatabaseImportService {
         return error;
       });
 
-      this.logger.warn(`Unable to import database: ${errors[0]?.constructor?.name || 'UncaughtError'}`, errors[0]);
+      this.logger.warn(`Unable to import database: ${errors[0]?.constructor?.name || 'UncaughtError'}`,
+        errors[0], sessionMetadata);
 
       return {
         index,
@@ -323,7 +340,7 @@ export class DatabaseImportService {
    * Try to parse file based on mimetype and known\supported formats
    * @param file
    */
-  static parseFile(file): any {
+  static parseFile(file: ImportFileType): any {
     const data = file?.buffer?.toString();
 
     let databases = DatabaseImportService.parseJson(data);

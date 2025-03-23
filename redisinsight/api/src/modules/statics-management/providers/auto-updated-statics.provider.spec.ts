@@ -4,7 +4,7 @@ import config from 'src/utils/config';
 import { AutoUpdatedStaticsProvider } from './auto-updated-statics.provider';
 
 const PATH_CONFIG = config.get('dir_path');
-const GUIDES = config.get('guides');
+const TUTORIALS = config.get('tutorials');
 
 jest.mock('axios');
 const mockedAxios = axios as jest.Mocked<typeof axios>;
@@ -19,6 +19,8 @@ jest.mock('adm-zip', () => jest.fn().mockImplementation(() => mockedAdmZip));
 
 describe('AutoUpdatedStaticsProvider', () => {
   let service: AutoUpdatedStaticsProvider;
+  let initDefaultsSpy: jest.SpyInstance;
+  let autoUpdateSpy: jest.SpyInstance;
 
   beforeEach(async () => {
     jest.mock('fs-extra', () => mockedFs);
@@ -26,27 +28,57 @@ describe('AutoUpdatedStaticsProvider', () => {
     jest.mock('adm-zip', () => jest.fn().mockImplementation(() => mockedAdmZip));
 
     service = new AutoUpdatedStaticsProvider({
-      name: 'GuidesProvider',
-      destinationPath: PATH_CONFIG.guides,
-      defaultSourcePath: PATH_CONFIG.defaultGuides,
-      updateUrl: GUIDES.updateUrl,
-      buildInfo: GUIDES.buildInfo,
-      zip: GUIDES.zip,
-      devMode: GUIDES.devMode,
+      name: 'TutorialsProvider',
+      destinationPath: PATH_CONFIG.tutorials,
+      defaultSourcePath: PATH_CONFIG.defaultTutorials,
+      updateUrl: TUTORIALS.updateUrl,
+      buildInfo: TUTORIALS.buildInfo,
+      zip: TUTORIALS.zip,
+      devMode: TUTORIALS.devMode,
+      autoUpdate: true,
+      initDefaults: true,
     });
   });
 
   describe('onModuleInit', () => {
-    it('should not copy defaults when files already exists', async () => {
-      const initDefaultsSpy = jest.spyOn(service, 'initDefaults');
-      initDefaultsSpy.mockResolvedValueOnce();
-      const autoUpdateSpy = jest.spyOn(service, 'autoUpdate');
-      autoUpdateSpy.mockResolvedValueOnce();
+    beforeEach(() => {
+      initDefaultsSpy = jest.spyOn(service, 'initDefaults');
+      autoUpdateSpy = jest.spyOn(service, 'autoUpdate');
 
+      initDefaultsSpy.mockResolvedValueOnce(undefined);
+      autoUpdateSpy.mockResolvedValueOnce(undefined);
+    });
+
+    it('should invoke autoUpdate and initDefaults', async () => {
       await service.onModuleInit();
 
       expect(initDefaultsSpy).toHaveBeenCalled();
       expect(autoUpdateSpy).toHaveBeenCalled();
+    });
+    it('should invoke autoUpdate but not initDefaults', async () => {
+      service['options'].initDefaults = false;
+
+      await service.onModuleInit();
+
+      expect(initDefaultsSpy).not.toHaveBeenCalled();
+      expect(autoUpdateSpy).toHaveBeenCalled();
+    });
+    it('should not invoke autoUpdate but invoke initDefaults', async () => {
+      service['options'].autoUpdate = false;
+
+      await service.onModuleInit();
+
+      expect(initDefaultsSpy).toHaveBeenCalled();
+      expect(autoUpdateSpy).not.toHaveBeenCalled();
+    });
+    it('should not invoke autoUpdate and initDefaults', async () => {
+      service['options'].initDefaults = false;
+      service['options'].autoUpdate = false;
+
+      await service.onModuleInit();
+
+      expect(initDefaultsSpy).not.toHaveBeenCalled();
+      expect(autoUpdateSpy).not.toHaveBeenCalled();
     });
   });
 

@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import * as IORedis from 'ioredis';
 import {
   get,
   filter,
@@ -9,13 +8,11 @@ import {
   sumBy,
   isNumber,
 } from 'lodash';
-import {
-  convertBulkStringsToObject,
-  convertRedisInfoReplyToObject,
-} from 'src/utils';
-import { getTotal } from 'src/modules/database/utils/database.total.util';
+import { getTotalKeys, convertMultilineReplyToObject } from 'src/modules/redis/utils';
 import { DatabaseOverview } from 'src/modules/database/models/database-overview';
 import { ClientMetadata } from 'src/common/models';
+import { RedisClient, RedisClientConnectionType, RedisClientNodeRole } from 'src/modules/redis/client';
+import { DatabaseOverviewKeyspace } from '../constants/overview';
 
 @Injectable()
 export class DatabaseOverviewProvider {
@@ -25,10 +22,12 @@ export class DatabaseOverviewProvider {
    * Calculates redis database metrics based on connection type (eg Cluster or Standalone)
    * @param clientMetadata
    * @param client
+   * @param keyspace
    */
   async getOverview(
     clientMetadata: ClientMetadata,
-    client: IORedis.Redis | IORedis.Cluster,
+    client: RedisClient,
+    keyspace: DatabaseOverviewKeyspace,
   ): Promise<DatabaseOverview> {
     let nodesInfo = [];
     let totalKeys;
@@ -36,20 +35,24 @@ export class DatabaseOverviewProvider {
 
     const currentDbIndex = isNumber(clientMetadata.db)
       ? clientMetadata.db
-      : get(client, ['options', 'db'], 0);
+      : await client.getCurrentDbIndex();
 
-    if (client.isCluster) {
-      nodesInfo = await this.getNodesInfo(client as IORedis.Cluster);
-      totalKeys = await this.calculateNodesTotalKeys(client as IORedis.Cluster);
+    if (client.getConnectionType() === RedisClientConnectionType.CLUSTER) {
+      nodesInfo = await this.getNodesInfo(client);
+      totalKeys = await this.calculateNodesTotalKeys(client);
     } else {
-      nodesInfo = [await this.getNodeInfo(client as IORedis.Redis)];
-      const [calculatedTotalKeys, calculatedTotalKeysPerDb] = this.calculateTotalKeys(nodesInfo, currentDbIndex);
+      nodesInfo = [await this.getNodeInfo(client)];
+      const [
+        calculatedTotalKeys,
+        calculatedTotalKeysPerDb,
+      ] = this.calculateTotalKeys(nodesInfo, currentDbIndex, keyspace);
       totalKeys = calculatedTotalKeys;
       totalKeysPerDb = calculatedTotalKeysPerDb;
     }
 
     return {
       version: this.getVersion(nodesInfo),
+      serverName: this.getServerName(nodesInfo),
       totalKeys,
       totalKeysPerDb,
       usedMemory: this.calculateUsedMemory(nodesInfo),
@@ -66,12 +69,12 @@ export class DatabaseOverviewProvider {
    * @param client
    * @private
    */
-  private async getNodeInfo(client: IORedis.Redis) {
+  private async getNodeInfo(client: RedisClient) {
     const { host, port } = client.options;
+    const infoData = await client.getInfo();
+
     return {
-      ...convertRedisInfoReplyToObject(
-        await client.info(),
-      ),
+      ...infoData,
       host,
       port,
     };
@@ -82,8 +85,8 @@ export class DatabaseOverviewProvider {
    * @param client
    * @private
    */
-  private async getNodesInfo(client: IORedis.Cluster) {
-    return Promise.all(client.nodes('all').map(this.getNodeInfo));
+  private async getNodesInfo(client: RedisClient) {
+    return Promise.all((await client.nodes()).map(this.getNodeInfo));
   }
 
   /**
@@ -119,6 +122,15 @@ export class DatabaseOverviewProvider {
   }
 
   /**
+   * Get server_name from the first shard in the list
+   * @param nodes
+   * @private
+   */
+  private getServerName(nodes = []): string {
+    return get(nodes, [0, 'server', 'server_name'], null);
+  }
+
+  /**
    * Sum of current ops per second (instantaneous_ops_per_sec) for all shards
    * @param nodes
    * @private
@@ -129,7 +141,7 @@ export class DatabaseOverviewProvider {
     }
 
     return sumBy(nodes, (node) => parseInt(
-      get(node, 'stats.instantaneous_ops_per_sec', 0),
+      get(node, 'stats.instantaneous_ops_per_sec', '0'),
       10,
     ));
   }
@@ -145,7 +157,7 @@ export class DatabaseOverviewProvider {
     }
 
     return sumBy(nodes, (node) => parseInt(
-      get(node, 'stats.instantaneous_input_kbps', 0),
+      get(node, 'stats.instantaneous_input_kbps', '0'),
       10,
     ));
   }
@@ -161,8 +173,7 @@ export class DatabaseOverviewProvider {
     }
 
     return sumBy(nodes, (node) => parseInt(
-      get(node, 'stats.instantaneous_output_kbps', 0),
-      10,
+      get(node, 'stats.instantaneous_output_kbps', '0'), 10,
     ));
   }
 
@@ -176,7 +187,9 @@ export class DatabaseOverviewProvider {
       return undefined;
     }
 
-    const clientsPerNode = map(nodes, (node) => parseInt(get(node, 'clients.connected_clients', 0), 10));
+    const clientsPerNode = map(nodes, (node) => parseInt(
+      get(node, 'clients.connected_clients', '0'), 10,
+    ));
     return this.getMedianValue(clientsPerNode);
   }
 
@@ -193,7 +206,9 @@ export class DatabaseOverviewProvider {
         return undefined;
       }
 
-      return sumBy(masterNodes, (node) => parseInt(get(node, 'memory.used_memory', 0), 10));
+      return sumBy(masterNodes, (node) => parseInt(
+        get(node, 'memory.used_memory', '0'), 10,
+      ));
     } catch (e) {
       return null;
     }
@@ -204,9 +219,14 @@ export class DatabaseOverviewProvider {
    * In case when shard has multiple logical databases shard total keys = sum of all dbs keys
    * @param nodes
    * @param index
+   * @param keyspace
    * @private
    */
-  private calculateTotalKeys(nodes = [], index: number): [number, Record<string, number>] {
+  private calculateTotalKeys(
+    nodes = [],
+    index: number,
+    keyspace: DatabaseOverviewKeyspace,
+  ): [number, Record<string, number>] {
     try {
       const masterNodes = DatabaseOverviewProvider.getMasterNodesToWorkWith(nodes);
 
@@ -214,13 +234,13 @@ export class DatabaseOverviewProvider {
         return [undefined, undefined];
       }
 
-      const totalKeysPerDb = {};
+      const totalKeysPerDb: Record<string, number> = {};
 
       masterNodes.forEach((node) => {
         map(
           get(node, 'keyspace', {}),
           (dbKeys, dbNumber): void => {
-            const { keys } = convertBulkStringsToObject(dbKeys, ',', '=');
+            const { keys } = convertMultilineReplyToObject(dbKeys, ',', '=');
 
             if (!totalKeysPerDb[dbNumber]) {
               totalKeysPerDb[dbNumber] = 0;
@@ -233,19 +253,23 @@ export class DatabaseOverviewProvider {
 
       const totalKeys = totalKeysPerDb ? sum(Object.values(totalKeysPerDb)) : undefined;
       const dbIndexKeys = totalKeysPerDb[`db${index}`] || 0;
-      return [totalKeys, dbIndexKeys === totalKeys ? undefined : { [`db${index}`]: dbIndexKeys }];
+      const calculatedTotalKeysPerDb = keyspace === DatabaseOverviewKeyspace.Full
+        ? totalKeysPerDb
+        : { [`db${index}`]: dbIndexKeys };
+
+      return [totalKeys, dbIndexKeys === totalKeys ? undefined : calculatedTotalKeysPerDb];
     } catch (e) {
       return [null, null];
     }
   }
 
   private async calculateNodesTotalKeys(
-    client: IORedis.Cluster,
+    client: RedisClient,
   ): Promise<number> {
     const nodesTotal: number[] = await Promise.all(
-      client
-        .nodes('master')
-        .map(async (node) => getTotal(node)),
+      (await client
+        .nodes(RedisClientNodeRole.PRIMARY))
+        .map(async (node) => getTotalKeys(node)),
     );
     return nodesTotal.reduce((prev, cur) => (
       prev + cur

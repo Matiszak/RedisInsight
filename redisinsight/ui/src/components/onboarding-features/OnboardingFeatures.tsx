@@ -9,10 +9,14 @@ import { setMonitorInitialState, showMonitor } from 'uiSrc/slices/cli/monitor'
 import { Pages } from 'uiSrc/constants/pages'
 import { connectedInstanceSelector } from 'uiSrc/slices/instances/instances'
 import { dbAnalysisSelector, setDatabaseAnalysisViewTab } from 'uiSrc/slices/analytics/dbAnalysis'
-import { incrementOnboardStepAction, setOnboardNextStep, setOnboardPrevStep } from 'uiSrc/slices/app/features'
+import {
+  appFeatureFlagsFeaturesSelector,
+  incrementOnboardStepAction,
+  setOnboardNextStep,
+  setOnboardPrevStep
+} from 'uiSrc/slices/app/features'
 import { ConnectionType } from 'uiSrc/slices/interfaces'
 import { DatabaseAnalysisViewTab } from 'uiSrc/slices/interfaces/analytics'
-import { resetWorkbenchEASearch, setWorkbenchEAMinimized } from 'uiSrc/slices/app/context'
 import OnboardingEmoji from 'uiSrc/assets/img/onboarding-emoji.svg'
 import { sendEventTelemetry, TelemetryEvent } from 'uiSrc/telemetry'
 import { OnboardingStepName, OnboardingSteps } from 'uiSrc/constants/onboarding'
@@ -20,6 +24,17 @@ import { OnboardingStepName, OnboardingSteps } from 'uiSrc/constants/onboarding'
 import { fetchRedisearchListAction } from 'uiSrc/slices/browser/redisearch'
 import { bufferToString, Nullable } from 'uiSrc/utils'
 import { CodeBlock } from 'uiSrc/components'
+
+import {
+  changeSelectedTab,
+  changeSidePanel,
+  resetExplorePanelSearch,
+  setExplorePanelIsPageOpen
+} from 'uiSrc/slices/panels/sidePanels'
+import { InsightsPanelTabs, SidePanels } from 'uiSrc/slices/interfaces/insights'
+import { EXTERNAL_LINKS } from 'uiSrc/constants/links'
+import { FeatureFlags } from 'uiSrc/constants'
+import { isAnyFeatureEnabled } from 'uiSrc/utils/features'
 
 import styles from './styles.module.scss'
 
@@ -86,6 +101,12 @@ const ONBOARDING_FEATURES = {
     title: 'Filter and search',
     Inner: () => {
       const { id: connectedInstanceId = '' } = useSelector(connectedInstanceSelector)
+      const {
+        [FeatureFlags.databaseChat]: databaseChatFeature,
+        [FeatureFlags.documentationChat]: documentationChatFeature,
+      } = useSelector(appFeatureFlagsFeaturesSelector)
+      const isAnyChatAvailable = isAnyFeatureEnabled([databaseChatFeature, documentationChatFeature])
+
       const dispatch = useDispatch()
       const telemetryArgs: TelemetryArgs = [connectedInstanceId, OnboardingStepName.BrowserFilters]
 
@@ -94,7 +115,36 @@ const ONBOARDING_FEATURES = {
         onSkip: () => sendClosedTelemetryEvent(...telemetryArgs),
         onBack: () => sendBackTelemetryEvent(...telemetryArgs),
         onNext: () => {
+          if (isAnyChatAvailable) {
+            dispatch(changeSidePanel(SidePanels.AiAssistant))
+            sendNextTelemetryEvent(...telemetryArgs)
+            return
+          }
+
+          dispatch(setOnboardNextStep())
           dispatch(openCli())
+
+          sendNextTelemetryEvent(...telemetryArgs)
+        }
+      }
+    }
+  },
+  BROWSER_COPILOT: {
+    step: OnboardingSteps.BrowserCopilot,
+    title: 'Try Redis Copilot',
+    Inner: () => {
+      const { id: connectedInstanceId = '' } = useSelector(connectedInstanceSelector)
+
+      const dispatch = useDispatch()
+      const telemetryArgs: TelemetryArgs = [connectedInstanceId, OnboardingStepName.BrowserCopilot]
+
+      return {
+        content: 'Redis Copilot is an AI-powered companion that lets you learn about Redis and explore your data, in a conversational manner, while also providing context-aware assistance to build search queries.',
+        onSkip: () => sendClosedTelemetryEvent(...telemetryArgs),
+        onBack: () => sendBackTelemetryEvent(...telemetryArgs),
+        onNext: () => {
+          dispatch(openCli())
+          dispatch(changeSidePanel(null))
           sendNextTelemetryEvent(...telemetryArgs)
         }
       }
@@ -105,13 +155,28 @@ const ONBOARDING_FEATURES = {
     title: 'CLI',
     Inner: () => {
       const { id: connectedInstanceId = '' } = useSelector(connectedInstanceSelector)
+      const {
+        [FeatureFlags.databaseChat]: databaseChatFeature,
+        [FeatureFlags.documentationChat]: documentationChatFeature,
+      } = useSelector(appFeatureFlagsFeaturesSelector)
+      const isAnyChatAvailable = isAnyFeatureEnabled([databaseChatFeature, documentationChatFeature])
+
       const dispatch = useDispatch()
       const telemetryArgs: TelemetryArgs = [connectedInstanceId, OnboardingStepName.BrowserCLI]
 
       return {
         content: 'Use CLI to run Redis commands.',
         onSkip: () => sendClosedTelemetryEvent(...telemetryArgs),
-        onBack: () => sendBackTelemetryEvent(...telemetryArgs),
+        onBack: () => {
+          if (isAnyChatAvailable) {
+            dispatch(changeSidePanel(SidePanels.AiAssistant))
+            sendNextTelemetryEvent(...telemetryArgs)
+            return
+          }
+
+          dispatch(setOnboardPrevStep())
+          sendBackTelemetryEvent(...telemetryArgs)
+        },
         onNext: () => {
           dispatch(openCliHelper())
           sendNextTelemetryEvent(...telemetryArgs)
@@ -200,7 +265,7 @@ const ONBOARDING_FEATURES = {
           (indexes) => {
             setFirstIndex(indexes?.length ? bufferToString(indexes[0]) : '')
           },
-          undefined,
+          () => setFirstIndex(''),
           false
         ))
       }, [])
@@ -212,7 +277,7 @@ const ONBOARDING_FEATURES = {
             <EuiSpacer size="xs" />
             Take advantage of syntax highlighting, intelligent auto-complete, and working with commands in editor mode.
             <EuiSpacer size="xs" />
-            Workbench visualizes complex <a href="https://redis.io/docs/about/about-stack/" target="_blank" rel="noreferrer">Redis Stack</a> data
+            Workbench visualizes complex <a href={EXTERNAL_LINKS.redisStack} target="_blank" rel="noreferrer">Redis Stack</a> data
             models such as documents, graphs, and time series.
             Or you <a href="https://github.com/RedisInsight/Packages" target="_blank" rel="noreferrer">can build your own visualization</a>.
 
@@ -254,54 +319,55 @@ const ONBOARDING_FEATURES = {
           dispatch(showMonitor())
           sendBackTelemetryEvent(...telemetryArgs)
         },
-        onNext: () => sendNextTelemetryEvent(...telemetryArgs),
+        onNext: () => {
+          dispatch(changeSelectedTab(InsightsPanelTabs.Explore))
+          dispatch(changeSidePanel(SidePanels.Insights))
+          sendNextTelemetryEvent(...telemetryArgs)
+        },
       }
     }
   },
-  WORKBENCH_ENABLEMENT_GUIDE: {
-    step: OnboardingSteps.WorkbenchEnablementGuide,
+  EXPLORE_REDIS: {
+    step: OnboardingSteps.Tutorials,
     title: 'Explore and learn more',
     Inner: () => {
       const { id: connectedInstanceId = '' } = useSelector(connectedInstanceSelector)
-      const dispatch = useDispatch()
-      const telemetryArgs: TelemetryArgs = [connectedInstanceId, OnboardingStepName.WorkbenchGuides]
+      const telemetryArgs: TelemetryArgs = [connectedInstanceId, OnboardingStepName.ExploreTutorials]
 
-      useEffect(() => {
-        // here we can use it on mount, because enablement area always rendered on workbench
-        dispatch(setWorkbenchEAMinimized(false))
-      }, [])
+      const history = useHistory()
+      const dispatch = useDispatch()
 
       return {
-        content: 'Learn more about how Redis can solve your use cases using Guides and Tutorials.',
+        content: 'Learn more about how Redis can solve your use cases using interactive Tutorials.',
         onSkip: () => sendClosedTelemetryEvent(...telemetryArgs),
-        onBack: () => sendBackTelemetryEvent(...telemetryArgs),
-        onNext: () => sendNextTelemetryEvent(...telemetryArgs)
+        onBack: () => {
+          history.push(Pages.workbench(connectedInstanceId))
+          dispatch(changeSidePanel(null))
+          sendBackTelemetryEvent(...telemetryArgs)
+        },
+        onNext: () => {
+          dispatch(resetExplorePanelSearch())
+          dispatch(setExplorePanelIsPageOpen(false))
+          sendNextTelemetryEvent(...telemetryArgs)
+        }
       }
     }
   },
-  WORKBENCH_CUSTOM_TUTORIALS: {
-    step: OnboardingSteps.WorkbenchCustomTutorials,
+  EXPLORE_CUSTOM_TUTORIALS: {
+    step: OnboardingSteps.CustomTutorials,
     title: 'Upload your tutorials',
     Inner: () => {
       const { id: connectedInstanceId = '' } = useSelector(connectedInstanceSelector)
       const history = useHistory()
       const dispatch = useDispatch()
-      const telemetryArgs: TelemetryArgs = [connectedInstanceId, OnboardingStepName.WorkbenchCustomTutorials]
-
-      useEffect(() => {
-        // here we can use it on mount, because enablement area always rendered on workbench
-        dispatch(setWorkbenchEAMinimized(false))
-        // close opened page
-        dispatch(resetWorkbenchEASearch())
-        history.push(Pages.workbench(connectedInstanceId))
-      }, [])
+      const telemetryArgs: TelemetryArgs = [connectedInstanceId, OnboardingStepName.ExploreCustomTutorials]
 
       return {
         content: (
           <>
-            Share your Redis expertise with your team and the wider community by building custom RedisInsight tutorials.
+            Share your Redis expertise with your team and the wider community by building custom Redis Insight tutorials.
             <EuiSpacer size="xs" />
-            Use our <a href="https://github.com/RedisInsight/Tutorials" target="_blank" rel="noreferrer">instructions</a> to
+            Use our <a href={EXTERNAL_LINKS.guidesRepo} target="_blank" rel="noreferrer">instructions</a> to
             describe your implementations of Redis for other users to follow and
             interact with in the context of a connected Redis database
           </>
@@ -309,6 +375,7 @@ const ONBOARDING_FEATURES = {
         onSkip: () => sendClosedTelemetryEvent(...telemetryArgs),
         onBack: () => sendBackTelemetryEvent(...telemetryArgs),
         onNext: () => {
+          dispatch(changeSidePanel(null))
           history.push(Pages.clusterDetails(connectedInstanceId))
           sendNextTelemetryEvent(...telemetryArgs)
         }
@@ -321,6 +388,7 @@ const ONBOARDING_FEATURES = {
     Inner: () => {
       const { id: connectedInstanceId = '' } = useSelector(connectedInstanceSelector)
       const history = useHistory()
+      const dispatch = useDispatch()
       const telemetryArgs: TelemetryArgs = [connectedInstanceId, OnboardingStepName.ClusterOverview]
 
       return {
@@ -332,6 +400,8 @@ const ONBOARDING_FEATURES = {
         ),
         onSkip: () => sendClosedTelemetryEvent(...telemetryArgs),
         onBack: () => {
+          dispatch(changeSelectedTab(InsightsPanelTabs.Explore))
+          dispatch(changeSidePanel(SidePanels.Insights))
           history.push(Pages.workbench(connectedInstanceId))
           sendBackTelemetryEvent(...telemetryArgs)
         },
@@ -356,15 +426,17 @@ const ONBOARDING_FEATURES = {
         content: (
           <>
             Use Database Analysis to get summary of your database and receive
-            recommendations to improve memory usage and performance.
+            tips to improve memory usage and performance.
             <EuiSpacer size="xs" />
             Run a new report to get an overview of the database and receive
-            recommendations to optimize your database usage.
+            tips to optimize your database usage.
           </>
         ),
         onSkip: () => sendClosedTelemetryEvent(...telemetryArgs),
         onBack: () => {
           if (connectionType !== ConnectionType.Cluster) {
+            dispatch(changeSelectedTab(InsightsPanelTabs.Explore))
+            dispatch(changeSidePanel(SidePanels.Insights))
             dispatch(setOnboardPrevStep())
             history.push(Pages.workbench(connectedInstanceId))
           }
@@ -385,14 +457,14 @@ const ONBOARDING_FEATURES = {
   },
   ANALYTICS_RECOMMENDATIONS: {
     step: OnboardingSteps.AnalyticsRecommendations,
-    title: 'Database Recommendations',
+    title: 'Database Tips',
     Inner: () => {
       const { id: connectedInstanceId = '' } = useSelector(connectedInstanceSelector)
       const history = useHistory()
       const telemetryArgs: TelemetryArgs = [connectedInstanceId, OnboardingStepName.DatabaseAnalysisRecommendations]
 
       return {
-        content: 'See recommendations to optimize the memory usage, performance and increase the security of your Redis database',
+        content: 'See tips to optimize the memory usage, performance and increase the security of your Redis database',
         onSkip: () => sendClosedTelemetryEvent(...telemetryArgs),
         onBack: () => sendBackTelemetryEvent(...telemetryArgs),
         onNext: () => {
@@ -461,35 +533,8 @@ const ONBOARDING_FEATURES = {
           sendBackTelemetryEvent(...telemetryArgs)
         },
         onNext: () => {
-          history.push(Pages.triggeredFunctions(connectedInstanceId))
           sendNextTelemetryEvent(...telemetryArgs)
         }
-      }
-    }
-  },
-  TRIGGERED_FUNCTIONS_PAGE: {
-    step: OnboardingSteps.TriggeredFunctionsPage,
-    title: 'Triggers and Functions',
-    Inner: () => {
-      const { id: connectedInstanceId = '' } = useSelector(connectedInstanceSelector)
-      const history = useHistory()
-      const telemetryArgs: TelemetryArgs = [connectedInstanceId, OnboardingStepName.TriggeredFunctions]
-
-      return {
-        content: (
-          <>
-            Triggers and Functions can execute server-side functions triggered by certain
-            events or data operations to decrease latency and react in real time to database events.
-            <EuiSpacer size="xs" />
-            See the list of uploaded libraries, upload or delete libraries, or investigate and debug functions.
-          </>
-        ),
-        onSkip: () => sendClosedTelemetryEvent(...telemetryArgs),
-        onBack: () => {
-          history.push(Pages.pubSub(connectedInstanceId))
-          sendBackTelemetryEvent(...telemetryArgs)
-        },
-        onNext: () => sendNextTelemetryEvent(...telemetryArgs)
       }
     }
   },

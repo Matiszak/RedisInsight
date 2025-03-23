@@ -14,12 +14,32 @@ export default {
       <>
         <b>{formatNameShort(instanceName)}</b>
         {' '}
+        has been added to Redis Insight.
+      </>
+    ),
+  }),
+  ADDED_NEW_RDI_INSTANCE: (instanceName: string) => ({
+    title: 'Instance has been added',
+    message: (
+      <>
+        <b>{formatNameShort(instanceName)}</b>
+        {' '}
         has been added to RedisInsight.
       </>
     ),
   }),
   DELETE_INSTANCE: (instanceName: string) => ({
     title: 'Database has been deleted',
+    message: (
+      <>
+        <b>{formatNameShort(instanceName)}</b>
+        {' '}
+        has been deleted from Redis Insight.
+      </>
+    ),
+  }),
+  DELETE_RDI_INSTANCE: (instanceName: string) => ({
+    title: 'Instance has been deleted',
     message: (
       <>
         <b>{formatNameShort(instanceName)}</b>
@@ -37,7 +57,31 @@ export default {
           <span>
             <b>{instanceNames.length}</b>
             {' '}
-            databases have been deleted from RedisInsight:
+            databases have been deleted from Redis Insight:
+          </span>
+          <ul style={{ marginBottom: 0 }}>
+            {instanceNames.slice(0, limitShowRemovedInstances).map((el, i) => (
+              // eslint-disable-next-line react/no-array-index-key
+              <li className={styles.list} key={i}>
+                {formatNameShort(el)}
+              </li>
+            ))}
+            {instanceNames.length >= limitShowRemovedInstances && <li>...</li>}
+          </ul>
+        </>
+      ),
+    }
+  },
+  DELETE_RDI_INSTANCES: (instanceNames: Maybe<string>[]) => {
+    const limitShowRemovedInstances = 10
+    return {
+      title: 'Instances have been deleted',
+      message: (
+        <>
+          <span>
+            <b>{instanceNames.length}</b>
+            {' '}
+            instances have been deleted from RedisInsight:
           </span>
           <ul style={{ marginBottom: 0 }}>
             {instanceNames.slice(0, limitShowRemovedInstances).map((el, i) => (
@@ -155,15 +199,19 @@ export default {
   TEST_CONNECTION: () => ({
     title: 'Connection is successful',
   }),
-  UPLOAD_DATA_BULK: (data: IBulkActionOverview, fileName: string) => {
+  UPLOAD_DATA_BULK: (data?: IBulkActionOverview, fileName?: string) => {
     const { processed = 0, succeed = 0, failed = 0, } = data?.summary ?? {}
     return ({
       title: (
         <>
           Action completed
-          <br />
-          <EuiText color="ghost">Commands executed from file:</EuiText>
-          <EuiText color="ghost">{formatLongName(fileName, 34, 5)}</EuiText>
+          {fileName ? (
+            <>
+              <br />
+              <EuiText color="ghost">Commands executed from file:</EuiText>
+              <EuiText color="ghost">{formatLongName(fileName, 34, 5)}</EuiText>
+            </>
+          ) : null}
         </>
       ),
       message: (
@@ -217,14 +265,18 @@ export default {
   }),
   REMOVED_ALL_CAPI_KEYS: () => ({
     title: 'API keys have been removed',
-    message: 'All API keys have been removed from RedisInsight.',
+    message: 'All API keys have been removed from Redis Insight.',
   }),
   REMOVED_CAPI_KEY: (name: string) => ({
     title: 'API Key has been removed',
-    message: `${formatNameShort(name)} has been removed from RedisInsight.`
+    message: `${formatNameShort(name)} has been removed from Redis Insight.`
   }),
   DATABASE_ALREADY_EXISTS: () => ({
     title: 'Database already exists',
     message: 'No new database connections have been added.',
+  }),
+  SUCCESS_RESET_PIPELINE: () => ({
+    title: 'Pipeline has been reset',
+    message: 'The RDI pipeline has been reset, consider flushing the target Redis database.',
   }),
 }

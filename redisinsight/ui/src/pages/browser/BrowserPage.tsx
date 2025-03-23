@@ -7,6 +7,7 @@ import {
   EuiButton,
 } from '@elastic/eui'
 
+import { isNumber } from 'lodash'
 import {
   formatLongName,
   getDbIndex,
@@ -30,17 +31,18 @@ import {
   setBrowserSelectedKey,
   appContextBrowser,
   setBrowserPanelSizes,
-  setLastPageContext,
   setBrowserBulkActionOpen,
+  appContextSelector,
 } from 'uiSrc/slices/app/context'
 import { resetErrors } from 'uiSrc/slices/app/notifications'
-import InstanceHeader from 'uiSrc/components/instance-header'
 import { RedisResponseBuffer } from 'uiSrc/slices/interfaces'
 import { connectedInstanceSelector } from 'uiSrc/slices/instances/instances'
 
 import { KeyViewType } from 'uiSrc/slices/interfaces/keys'
 import { SCAN_COUNT_DEFAULT, SCAN_TREE_COUNT_DEFAULT } from 'uiSrc/constants/api'
 import OnboardingStartPopover from 'uiSrc/pages/browser/components/onboarding-start-popover'
+import { sidePanelsSelector } from 'uiSrc/slices/panels/sidePanels'
+import { useStateWithContext } from 'uiSrc/services/hooks'
 import BrowserSearchPanel from './components/browser-search-panel'
 import BrowserLeftPanel from './components/browser-left-panel'
 import BrowserRightPanel from './components/browser-right-panel'
@@ -48,34 +50,45 @@ import BrowserRightPanel from './components/browser-right-panel'
 import styles from './styles.module.scss'
 
 const widthResponsiveSize = 1280
+const widthExplorePanel = 460
+
 export const firstPanelId = 'keys'
 export const secondPanelId = 'keyDetails'
+
+const isOneSideMode = (isInsightsOpen: boolean) =>
+  globalThis.innerWidth < widthResponsiveSize + (isInsightsOpen ? widthExplorePanel : 0)
 
 const BrowserPage = () => {
   const { instanceId } = useParams<{ instanceId: string }>()
 
-  const { name: connectedInstanceName, db } = useSelector(connectedInstanceSelector)
+  const { name: connectedInstanceName, db = 0, isFreeDb } = useSelector(connectedInstanceSelector)
   const {
     panelSizes,
     keyList: { selectedKey: selectedKeyContext },
     bulkActions: { opened: bulkActionOpenContext },
   } = useSelector(appContextBrowser)
+  const { contextInstanceId } = useSelector(appContextSelector)
+
   const { isBrowserFullScreen } = useSelector(keysSelector)
   const { type } = useSelector(selectedKeyDataSelector) ?? { type: '', length: 0 }
   const { viewType, searchMode } = useSelector(keysSelector)
+  const { openedPanel: openedSidePanel } = useSelector(sidePanelsSelector)
 
   const [isPageViewSent, setIsPageViewSent] = useState(false)
-  const [arePanelsCollapsed, setArePanelsCollapsed] = useState(false)
-  const [selectedKey, setSelectedKey] = useState<Nullable<RedisResponseBuffer>>(selectedKeyContext)
+  const [arePanelsCollapsed, setArePanelsCollapsed] = useState(isOneSideMode(!!openedSidePanel))
   const [isAddKeyPanelOpen, setIsAddKeyPanelOpen] = useState(false)
   const [isCreateIndexPanelOpen, setIsCreateIndexPanelOpen] = useState(false)
   const [isBulkActionsPanelOpen, setIsBulkActionsPanelOpen] = useState(bulkActionOpenContext)
 
+  const [selectedKey, setSelectedKey] = useStateWithContext<Nullable<RedisResponseBuffer>>(selectedKeyContext, null)
+
   const [sizes, setSizes] = useState(panelSizes)
 
   const prevSelectedType = useRef<string>(type)
+  const prevDbIndex = useRef(db)
   const selectedKeyRef = useRef<Nullable<RedisResponseBuffer>>(selectedKey)
   const isBulkActionsPanelOpenRef = useRef<boolean>(isBulkActionsPanelOpen)
+  const isSidePanelOpenRef = useRef<boolean>(!!openedSidePanel)
 
   const dispatch = useDispatch()
 
@@ -96,7 +109,6 @@ const BrowserPage = () => {
       })
       dispatch(setBrowserBulkActionOpen(isBulkActionsPanelOpenRef.current))
       dispatch(setBrowserSelectedKey(selectedKeyRef.current))
-      dispatch(setLastPageContext('browser'))
 
       if (!selectedKeyRef.current) {
         dispatch(toggleBrowserFullScreen(false))
@@ -109,12 +121,17 @@ const BrowserPage = () => {
   }, [isBulkActionsPanelOpen])
 
   useEffect(() => {
-    setSelectedKey(selectedKeyContext)
-  }, [selectedKeyContext])
+    if (contextInstanceId === instanceId) setSelectedKey(selectedKeyContext)
+  }, [selectedKeyContext, contextInstanceId])
 
   useEffect(() => {
     selectedKeyRef.current = selectedKey
   }, [selectedKey])
+
+  useEffect(() => {
+    setArePanelsCollapsed(() => isOneSideMode(!!openedSidePanel))
+    isSidePanelOpenRef.current = !!openedSidePanel
+  }, [openedSidePanel])
 
   useEffect(() => {
     if (connectedInstanceName && !isPageViewSent) {
@@ -123,7 +140,7 @@ const BrowserPage = () => {
   }, [connectedInstanceName, isPageViewSent])
 
   const updateWindowDimensions = () => {
-    setArePanelsCollapsed(globalThis.innerWidth < widthResponsiveSize)
+    setArePanelsCollapsed(isOneSideMode(isSidePanelOpenRef.current))
   }
 
   const onPanelWidthChange = useCallback((newSizes: any) => {
@@ -136,7 +153,10 @@ const BrowserPage = () => {
   const sendPageView = (instanceId: string) => {
     sendPageViewTelemetry({
       name: TelemetryPageView.BROWSER_PAGE,
-      databaseId: instanceId
+      eventData: {
+        databaseId: instanceId,
+        isFree: isFreeDb,
+      }
     })
     setIsPageViewSent(true)
   }
@@ -152,8 +172,9 @@ const BrowserPage = () => {
   }
 
   const handleAddKeyPanel = useCallback((value: boolean, keyName?: RedisResponseBuffer) => {
-    handlePanel(value, keyName)
-    setIsAddKeyPanelOpen(value)
+    handlePanel(value, keyName);
+    setIsAddKeyPanelOpen(value);
+    dispatch(setBrowserSelectedKey(keyName || null));
   }, [])
 
   const handleBulkActionsPanel = useCallback((value: boolean) => {
@@ -162,6 +183,7 @@ const BrowserPage = () => {
   }, [])
 
   const handleRemoveSelectedKey = useCallback(() => {
+    setBrowserSelectedKey(null);
     handlePanel(true)
   }, [])
 
@@ -176,6 +198,13 @@ const BrowserPage = () => {
     setIsCreateIndexPanelOpen(false)
   }, [])
 
+  useEffect(() => {
+    if (isNumber(db) && db !== prevDbIndex.current) {
+      onChangeDbIndex()
+    }
+    prevDbIndex.current = db
+  }, [db])
+
   const onChangeDbIndex = () => {
     if (selectedKey) {
       dispatch(toggleBrowserFullScreen(true))
@@ -189,16 +218,17 @@ const BrowserPage = () => {
     }))
   }
 
-  const selectKey = ({ rowData }: { rowData: any }) => {
-    if (!isEqualBuffers(rowData.name, selectedKey)) {
+  const selectKey = useCallback(({ rowData }: { rowData: any }) => {
+    if (!isEqualBuffers(rowData.name, selectedKeyRef.current)) {
       dispatch(toggleBrowserFullScreen(false))
 
       dispatch(setInitialStateByType(prevSelectedType.current))
       setSelectedKey(rowData.name)
+      dispatch(setBrowserSelectedKey(rowData.name));
       closeRightPanels()
       prevSelectedType.current = rowData.type
     }
-  }
+  }, [])
 
   const closePanel = () => {
     dispatch(toggleBrowserFullScreen(true))
@@ -212,21 +242,17 @@ const BrowserPage = () => {
 
   return (
     <div className={`browserPage ${styles.container}`}>
-      <InstanceHeader onChangeDbIndex={onChangeDbIndex} />
       {arePanelsCollapsed && isRightPanelOpen && !isBrowserFullScreen && (
-        <div>
-          <EuiButton
-            fill
-            color="secondary"
-            iconType="arrowLeft"
-            size="s"
-            onClick={closePanel}
-            className={styles.backBtn}
-            data-testid="back-right-panel-btn"
-          >
-            Browser
-          </EuiButton>
-        </div>
+        <EuiButton
+          color="secondary"
+          iconType="arrowLeft"
+          size="s"
+          onClick={closePanel}
+          className={styles.backBtn}
+          data-testid="back-right-panel-btn"
+        >
+          Back
+        </EuiButton>
       )}
       <div className={cx({
         [styles.hidden]: isRightPanelFullScreen })}
@@ -267,7 +293,6 @@ const BrowserPage = () => {
                     selectKey={selectKey}
                     removeSelectedKey={handleRemoveSelectedKey}
                     handleAddKeyPanel={handleAddKeyPanel}
-                    handleBulkActionsPanel={handleBulkActionsPanel}
                   />
                 </EuiResizablePanel>
 

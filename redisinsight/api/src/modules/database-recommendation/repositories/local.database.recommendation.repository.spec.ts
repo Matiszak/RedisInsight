@@ -1,5 +1,5 @@
 import { when } from 'jest-when';
-import { InternalServerErrorException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -11,6 +11,7 @@ import {
   mockRecommendationName,
   mockClientMetadata,
   mockDatabaseRecommendation,
+  mockEventEmitter,
   MockType,
 } from 'src/__mocks__';
 import { EncryptionService } from 'src/modules/encryption/encryption.service';
@@ -39,7 +40,10 @@ describe('LocalDatabaseRecommendationRepository', () => {
           provide: EncryptionService,
           useFactory: mockEncryptionService,
         },
-        EventEmitter2,
+        {
+          provide: EventEmitter2,
+          useValue: mockEventEmitter,
+        },
       ],
     }).compile();
 
@@ -58,7 +62,7 @@ describe('LocalDatabaseRecommendationRepository', () => {
         data: mockDatabaseRecommendationEntity.params,
       });
     when(encryptionService.decrypt)
-      .calledWith(mockDatabaseRecommendationEntity.params, jasmine.anything())
+      .calledWith(mockDatabaseRecommendationEntity.params, expect.anything())
       .mockReturnValue(JSON.stringify(mockDatabaseRecommendation.params));
   });
 
@@ -78,19 +82,53 @@ describe('LocalDatabaseRecommendationRepository', () => {
     });
   });
 
+  describe('isExistMulti', () => {
+    it('should return results for multiple recommendation names', async () => {
+      repository.findOneBy.mockResolvedValueOnce(null);
+      repository.findOneBy.mockResolvedValueOnce({});
+      expect(await service.isExistMulti(mockClientMetadata, ['test1', 'test2'])).toEqual({
+        test1: false,
+        test2: true,
+      });
+    });
+
+    it('should return empty Map when received error', async () => {
+      repository.findOneBy.mockRejectedValueOnce(new Error());
+      expect(await service.isExistMulti(mockClientMetadata, ['test1', 'test2'])).toEqual({});
+    });
+  });
+
   describe('create', () => {
     it('should create recommendation', async () => {
-      const result = await service.create(mockDatabaseRecommendation);
+      const result = await service.create(mockClientMetadata.sessionMetadata, mockDatabaseRecommendation);
 
       expect(result).toEqual(mockDatabaseRecommendation);
+      expect(mockEventEmitter.emit).toHaveBeenCalledTimes(1);
+      expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+        'new-recommendation',
+        {
+          sessionMetadata: mockClientMetadata.sessionMetadata,
+          recommendations: [{
+            databaseId: 'a77b23c1-7816-4ea4-b61f-d37795a0f805-db-id',
+            disabled: false,
+            hide: false,
+            id: 'databaseRecommendationID',
+            name: 'string',
+            params: {},
+            read: false,
+            vote: null,
+          }],
+        },
+      );
     });
 
     it('should not create recommendation', async () => {
       repository.save.mockRejectedValueOnce(new Error());
 
-      const result = await service.create(mockDatabaseRecommendation);
+      const result = await service.create(mockClientMetadata.sessionMetadata, mockDatabaseRecommendation);
 
       expect(result).toEqual(null);
+      expect(mockEventEmitter.emit).not.toHaveBeenCalled();
     });
   });
 
@@ -101,14 +139,14 @@ describe('LocalDatabaseRecommendationRepository', () => {
       expect(await service.delete(mockClientMetadata, 'id')).toEqual(undefined);
     });
 
-    it('should return InternalServerErrorException when recommendation does not found', async () => {
+    it('should return NotFoundException when recommendation does not found', async () => {
       repository.delete.mockResolvedValueOnce({ affected: 0 });
 
       try {
         await service.delete(mockClientMetadata, 'id');
         fail();
       } catch (e) {
-        expect(e).toBeInstanceOf(InternalServerErrorException);
+        expect(e).toBeInstanceOf(NotFoundException);
         expect(e.message).toEqual(ERROR_MESSAGES.DATABASE_RECOMMENDATION_NOT_FOUND);
       }
     });

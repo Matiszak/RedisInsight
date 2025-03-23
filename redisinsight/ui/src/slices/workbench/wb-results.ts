@@ -1,35 +1,48 @@
 import { createSlice } from '@reduxjs/toolkit'
 import { AxiosError } from 'axios'
-import { reverse } from 'lodash'
-import { apiService } from 'uiSrc/services'
-import { ApiEndpoints, EMPTY_COMMAND } from 'uiSrc/constants'
+import { chunk, reverse } from 'lodash'
+import { apiService, localStorageService } from 'uiSrc/services'
+import { ApiEndpoints, BrowserStorageItem, CodeButtonParams, EMPTY_COMMAND } from 'uiSrc/constants'
 import { addErrorNotification } from 'uiSrc/slices/app/notifications'
 import { CliOutputFormatterType } from 'uiSrc/constants/cliOutput'
-import { RunQueryMode, ResultsMode } from 'uiSrc/slices/interfaces/workbench'
+import { RunQueryMode, ResultsMode, CommandExecutionType } from 'uiSrc/slices/interfaces/workbench'
 import {
   getApiErrorMessage,
+  getCommandsForExecution,
+  getExecuteParams,
+  getMultiCommands,
   getUrl,
   isGroupResults,
   isSilentMode,
   isStatusSuccessful,
+  Nullable,
 } from 'uiSrc/utils'
 import { WORKBENCH_HISTORY_MAX_LENGTH } from 'uiSrc/pages/workbench/constants'
-import { CommandExecutionStatus } from 'uiSrc/slices/interfaces/cli'
+import { ClusterNodeRole, CommandExecutionStatus } from 'uiSrc/slices/interfaces/cli'
 import { setDbIndexState } from 'uiSrc/slices/app/context'
+import { PIPELINE_COUNT_DEFAULT } from 'uiSrc/constants/api'
+import {
+  addCommands, clearCommands, findCommand,
+  getLocalWbHistory,
+  removeCommand,
+} from 'uiSrc/services/workbenchStorage'
 import { CreateCommandExecutionsDto } from 'apiSrc/modules/workbench/dto/create-command-executions.dto'
 
 import { AppDispatch, RootState } from '../store'
 import {
-  CommandExecution,
+  CommandExecution, ConnectionType,
   StateWorkbenchResults,
 } from '../interfaces'
 
 export const initialState: StateWorkbenchResults = {
+  isLoaded: false,
   loading: false,
   processing: false,
   clearing: false,
   error: '',
   items: [],
+  resultsMode: localStorageService?.get(BrowserStorageItem.wbGroupMode) ?? ResultsMode.Default,
+  activeRunQueryMode: localStorageService?.get(BrowserStorageItem.RunQueryMode) ?? RunQueryMode.ASCII,
 }
 
 // A slice for recipes
@@ -48,11 +61,13 @@ const workbenchResultsSlice = createSlice({
       state.items = payload.map((item) =>
         ({ ...item, command: item.command || EMPTY_COMMAND, emptyCommand: !item.command }))
       state.loading = false
+      state.isLoaded = true
     },
 
     loadWBHistoryFailure: (state, { payload }) => {
       state.error = payload
       state.loading = false
+      state.isLoaded = true
     },
 
     // Process Workbench command to API
@@ -101,8 +116,13 @@ const workbenchResultsSlice = createSlice({
       state.processing = false
     },
 
-    sendWBCommand: (state, { payload: { commands, commandId } }:
-    { payload: { commands: string[], commandId: string } }) => {
+    sendWBCommand: (
+      state,
+      {
+        payload: { commands, commandId }
+      }:
+      { payload: { commands: string[], commandId: string } }
+    ) => {
       let newItems = [
         ...commands.map((command, i) => ({
           command,
@@ -171,6 +191,7 @@ const workbenchResultsSlice = createSlice({
 
     resetWBHistoryItems: (state) => {
       state.items = []
+      state.isLoaded = false
     },
 
     stopProcessing: (state) => {
@@ -188,7 +209,17 @@ const workbenchResultsSlice = createSlice({
 
     clearWbResultsFailed: (state) => {
       state.clearing = false
-    }
+    },
+
+    changeResultsMode: (state, { payload }) => {
+      state.resultsMode = payload
+      localStorageService.set(BrowserStorageItem.wbGroupMode, payload)
+    },
+
+    changeActiveRunQueryMode: (state, { payload }) => {
+      state.activeRunQueryMode = payload
+      localStorageService.set(BrowserStorageItem.RunQueryMode, payload)
+    },
   },
 })
 
@@ -211,6 +242,8 @@ export const {
   clearWbResults,
   clearWbResultsSuccess,
   clearWbResultsFailed,
+  changeResultsMode,
+  changeActiveRunQueryMode,
 } = workbenchResultsSlice.actions
 
 // A selector
@@ -220,16 +253,32 @@ export const workbenchResultsSelector = (state: RootState) => state.workbench.re
 export default workbenchResultsSlice.reducer
 
 // Asynchronous thunk actions
-export function fetchWBHistoryAction(instanceId: string) {
-  return async (dispatch: AppDispatch) => {
+export function fetchWBHistoryAction(
+  instanceId: string,
+  executionType = CommandExecutionType.Workbench,
+) {
+  return async (dispatch: AppDispatch, stateInit: () => RootState) => {
     dispatch(loadWBHistory())
 
     try {
+      const state = stateInit()
+      const envDependentFlag = state.app.features.featureFlags.features.envDependent?.flag
+      if (envDependentFlag === false) {
+        // Fetch commands from local storage
+        const commandsHistory = await getLocalWbHistory(instanceId)
+        if (Array.isArray(commandsHistory)) {
+          dispatch(loadWBHistorySuccess(reverse(commandsHistory)))
+        } else {
+          dispatch(loadWBHistorySuccess([]))
+        }
+        return
+      }
       const { data, status } = await apiService.get<CommandExecution[]>(
         getUrl(
           instanceId,
           ApiEndpoints.WORKBENCH_COMMAND_EXECUTIONS,
-        )
+        ),
+        { params: { type: executionType } }
       )
 
       if (isStatusSuccessful(status)) {
@@ -251,6 +300,7 @@ export function sendWBCommandAction({
   mode = RunQueryMode.ASCII,
   resultsMode = ResultsMode.Default,
   commandId = `${Date.now()}`,
+  executionType = CommandExecutionType.Workbench,
   onSuccessAction,
   onFailAction,
 }: {
@@ -259,6 +309,7 @@ export function sendWBCommandAction({
   commandId?: string
   mode: RunQueryMode
   resultsMode?: ResultsMode
+  executionType?: CommandExecutionType
   onSuccessAction?: (multiCommands: string[]) => void
   onFailAction?: () => void
 }) {
@@ -269,7 +320,7 @@ export function sendWBCommandAction({
 
       dispatch(sendWBCommand({
         commands: isGroupResults(resultsMode) ? [`${commands.length} - Command(s)`] : commands,
-        commandId
+        commandId,
       }))
 
       dispatch(setDbIndexState(true))
@@ -282,13 +333,18 @@ export function sendWBCommandAction({
         {
           commands,
           mode,
-          resultsMode
+          resultsMode,
+          type: executionType
         }
       )
 
       if (isStatusSuccessful(status)) {
         dispatch(sendWBCommandSuccess({ commandId, data: reverse(data), processing: !!multiCommands?.length }))
         dispatch(setDbIndexState(!!multiCommands?.length))
+        const envDependentFlag = state.app.features.featureFlags.features.envDependent?.flag
+        if (envDependentFlag === false) {
+          await addCommands(reverse(data))
+        }
         onSuccessAction?.(multiCommands)
       }
     } catch (_err) {
@@ -313,6 +369,7 @@ export function sendWBCommandClusterAction({
   mode = RunQueryMode.ASCII,
   resultsMode = ResultsMode.Default,
   commandId = `${Date.now()}`,
+  executionType = CommandExecutionType.Workbench,
   onSuccessAction,
   onFailAction,
 }: {
@@ -322,6 +379,7 @@ export function sendWBCommandClusterAction({
   multiCommands?: string[]
   mode?: RunQueryMode,
   resultsMode?: ResultsMode
+  executionType?: CommandExecutionType
   onSuccessAction?: (multiCommands: string[]) => void
   onFailAction?: () => void
 }) {
@@ -332,7 +390,7 @@ export function sendWBCommandClusterAction({
 
       dispatch(sendWBCommand({
         commands: isGroupResults(resultsMode) ? [`${commands.length} - Commands`] : commands,
-        commandId
+        commandId,
       }))
 
       const { data, status } = await apiService.post<CommandExecution[]>(
@@ -345,12 +403,17 @@ export function sendWBCommandClusterAction({
           commands,
           mode,
           resultsMode,
+          type: executionType,
           outputFormat: CliOutputFormatterType.Raw
         }
       )
 
       if (isStatusSuccessful(status)) {
         dispatch(sendWBCommandSuccess({ commandId, data: reverse(data), processing: !!multiCommands?.length }))
+        const envDependentFlag = state.app.features.featureFlags.features.envDependent?.flag
+        if (envDependentFlag === false) {
+          await addCommands(reverse(data))
+        }
         onSuccessAction?.(multiCommands)
       }
     } catch (_err) {
@@ -378,7 +441,15 @@ export function fetchWBCommandAction(
       const { id = '' } = state.connections.instances.connectedInstance
 
       dispatch(processWBCommand(commandId))
+      const envDependentFlag = state.app.features.featureFlags.features.envDependent?.flag
+      if (envDependentFlag === false) {
+        const command = await findCommand(commandId)
 
+        dispatch(fetchWBCommandSuccess(command as CommandExecution))
+
+        onSuccessAction?.()
+        return
+      }
       const { data, status } = await apiService.get<CommandExecution>(
         getUrl(
           id,
@@ -414,6 +485,14 @@ export function deleteWBCommandAction(
       const { id = '' } = state.connections.instances.connectedInstance
 
       dispatch(processWBCommand(commandId))
+      const envDependentFlag = state.app.features.featureFlags.features.envDependent?.flag
+      if (envDependentFlag === false) {
+        await removeCommand(id, commandId)
+
+        dispatch(deleteWBCommandSuccess(commandId))
+        onSuccessAction?.()
+        return
+      }
 
       const { status } = await apiService.delete<CommandExecution>(
         getUrl(
@@ -440,6 +519,7 @@ export function deleteWBCommandAction(
 
 // Asynchronous thunk action
 export function clearWbResultsAction(
+  executionType = CommandExecutionType.Workbench,
   onSuccessAction?: () => void,
   onFailAction?: () => void,
 ) {
@@ -449,12 +529,21 @@ export function clearWbResultsAction(
       const { id = '' } = state.connections.instances.connectedInstance
 
       dispatch(clearWbResults())
-
+      const envDependentFlag = state.app.features.featureFlags.features.envDependent?.flag
+      if (envDependentFlag === false) {
+        await clearCommands(id)
+        dispatch(clearWbResultsSuccess())
+        onSuccessAction?.()
+        return
+      }
       const { status } = await apiService.delete(
         getUrl(
           id,
           ApiEndpoints.WORKBENCH_COMMAND_EXECUTIONS,
         ),
+        {
+          data: { type: executionType }
+        }
       )
 
       if (isStatusSuccessful(status)) {
@@ -468,5 +557,111 @@ export function clearWbResultsAction(
       dispatch(clearWbResultsFailed())
       onFailAction?.()
     }
+  }
+}
+
+// Asynchronous thunk action
+export function sendWbQueryAction(
+  queryInit: string,
+  commandId?: Nullable<string>,
+  executeParams: CodeButtonParams = {},
+  onSuccessAction?: {
+    afterEach?: () => void,
+    afterAll?: () => void
+  },
+  onFail?: () => void
+) {
+  return async (dispatch: AppDispatch, stateInit: () => RootState) => {
+    const state = stateInit()
+
+    const {
+      resultsMode: resultsModeInitial,
+      activeRunQueryMode: activeRunQueryModeInitial
+    } = state.workbench.results || {}
+    const { batchSize: batchSizeInitial = PIPELINE_COUNT_DEFAULT } = state.user.settings?.config || {}
+    const currentExecuteParams = {
+      resultsMode: resultsModeInitial,
+      activeRunQueryMode: activeRunQueryModeInitial,
+      batchSize: batchSizeInitial,
+    }
+
+    const sendCommand = (
+      commands: string[],
+      multiCommands: string[] = [],
+      executeParams: any,
+      onSuccess: () => void
+    ) => {
+      const { activeRunQueryMode, resultsMode } = executeParams
+      const { connectionType, host, port } = state.connections.instances?.connectedInstance
+
+      if (connectionType !== ConnectionType.Cluster) {
+        dispatch(sendWBCommandAction({
+          resultsMode,
+          commands,
+          multiCommands,
+          mode: activeRunQueryMode,
+          onSuccessAction: onSuccess,
+          onFailAction: onFail
+        }))
+        return
+      }
+
+      const options: CreateCommandExecutionsDto = {
+        commands,
+        nodeOptions: {
+          host,
+          port,
+          enableRedirection: true,
+        },
+        role: ClusterNodeRole.All,
+      }
+      dispatch(
+        sendWBCommandClusterAction({
+          commands,
+          options,
+          mode: activeRunQueryMode,
+          resultsMode,
+          multiCommands,
+          onSuccessAction: onSuccess,
+          onFailAction: onFail
+        })
+      )
+    }
+
+    const prepareQueryToSend = (
+      commandInit: string,
+      commandId?: Nullable<string>,
+      executeParams: CodeButtonParams = {},
+    ) => {
+      if (!commandInit?.length) {
+        if (queryInit?.length) {
+          onSuccessAction?.afterAll?.()
+        }
+        return
+      }
+
+      const { batchSize, activeRunQueryMode, resultsMode } = getExecuteParams(executeParams, currentExecuteParams)
+      const commandsForExecuting = getCommandsForExecution(commandInit)
+      const chunkSize = isGroupResults(resultsMode) ? commandsForExecuting.length : (batchSize > 1 ? batchSize : 1)
+      const [commands, ...rest] = chunk(commandsForExecuting, chunkSize)
+      const multiCommands = rest.map((command) => getMultiCommands(command))
+
+      if (!commands?.length) {
+        prepareQueryToSend(multiCommands.join('\n'), commandId, executeParams)
+        return
+      }
+
+      sendCommand(
+        commands,
+        multiCommands,
+        { activeRunQueryMode, resultsMode },
+        () => {
+          prepareQueryToSend(multiCommands.join('\n'), commandId, executeParams)
+          onSuccessAction?.afterEach?.()
+        }
+      )
+    }
+
+    prepareQueryToSend(queryInit, commandId, executeParams)
   }
 }

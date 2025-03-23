@@ -1,18 +1,17 @@
 /* eslint-disable react/destructuring-assignment */
 /* eslint-disable react/no-this-in-sfc */
-import { EuiButtonIcon, EuiToolTip } from '@elastic/eui'
+import { EuiButton, EuiButtonIcon, EuiCheckbox, EuiFlexItem, EuiFlexGroup, EuiIcon, EuiPopover, EuiToolTip } from '@elastic/eui'
 import cx from 'classnames'
-import React, { FC, Ref, SVGProps, useRef } from 'react'
+import React, { FC, Ref, SVGProps, useRef, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import AutoSizer from 'react-virtualized-auto-sizer'
-import { ReactComponent as TreeViewIcon } from 'uiSrc/assets/img/icons/treeview.svg'
+import ColumnsIcon from 'uiSrc/assets/img/icons/columns.svg?react'
+import TreeViewIcon from 'uiSrc/assets/img/icons/treeview.svg?react'
 import KeysSummary from 'uiSrc/components/keys-summary'
-import { BrowserStorageItem } from 'uiSrc/constants'
 import { SCAN_COUNT_DEFAULT, SCAN_TREE_COUNT_DEFAULT } from 'uiSrc/constants/api'
-import { localStorageService } from 'uiSrc/services'
-import { resetBrowserTree, setBrowserKeyListDataLoaded, } from 'uiSrc/slices/app/context'
+import { appContextDbConfig, resetBrowserTree, setBrowserKeyListDataLoaded, setBrowserSelectedKey, setBrowserShownColumns, } from 'uiSrc/slices/app/context'
 
-import { changeKeyViewType, fetchKeys, keysSelector, resetKeysData, } from 'uiSrc/slices/browser/keys'
+import { changeKeyViewType, fetchKeys, keysSelector, resetKeyInfo, resetKeysData } from 'uiSrc/slices/browser/keys'
 import { redisearchSelector } from 'uiSrc/slices/browser/redisearch'
 import { connectedInstanceSelector } from 'uiSrc/slices/instances/instances'
 import { KeysStoreData, KeyViewType, SearchMode } from 'uiSrc/slices/interfaces/keys'
@@ -20,9 +19,9 @@ import { getBasedOnViewTypeEvent, sendEventTelemetry, TelemetryEvent } from 'uiS
 
 import { OnboardingStepName, OnboardingSteps } from 'uiSrc/constants/onboarding'
 import { incrementOnboardStepAction } from 'uiSrc/slices/app/features'
-import { OnboardingTour } from 'uiSrc/components'
+import { AutoRefresh, OnboardingTour } from 'uiSrc/components'
 import { ONBOARDING_FEATURES } from 'uiSrc/components/onboarding-features'
-import AutoRefresh from '../auto-refresh'
+import { BrowserColumns, KeyValueFormat } from 'uiSrc/constants'
 
 import styles from './styles.module.scss'
 
@@ -59,35 +58,51 @@ const KeysHeader = (props: Props) => {
     nextCursor,
   } = props
 
-  const { id: instanceId } = useSelector(connectedInstanceSelector)
+  const { id: instanceId, keyNameFormat } = useSelector(connectedInstanceSelector)
   const { viewType, searchMode, isFiltered } = useSelector(keysSelector)
+  const { shownColumns } = useSelector(appContextDbConfig)
   const { selectedIndex } = useSelector(redisearchSelector)
+
+  const [columnsConfigShown, setColumnsConfigShown] = useState(false)
 
   const rootDivRef: Ref<HTMLDivElement> = useRef(null)
 
   const dispatch = useDispatch()
 
+  // TODO: Check if encoding can be reused from BE and FE
+  const format = keyNameFormat as unknown as KeyValueFormat
+  const isTreeViewDisabled =
+    (format || KeyValueFormat.Unicode) === KeyValueFormat.HEX
   const viewTypes: ISwitchType<KeyViewType>[] = [
     {
       type: KeyViewType.Browser,
       tooltipText: 'List View',
       ariaLabel: 'List view button',
       dataTestId: 'view-type-browser-btn',
-      isActiveView() { return viewType === this.type },
+      isActiveView() {
+        return viewType === this.type
+      },
       getClassName() {
         return cx(styles.viewTypeBtn, { [styles.active]: this.isActiveView() })
       },
       getIconType() {
         return 'menu'
       },
-      onClick() { handleSwitchView(this.type) }
+      onClick() {
+        handleSwitchView(this.type)
+      },
     },
     {
       type: KeyViewType.Tree,
-      tooltipText: 'Tree View',
+      tooltipText: isTreeViewDisabled
+        ? 'Tree View is unavailable when the HEX key name format is selected.'
+        : 'Tree View',
       ariaLabel: 'Tree view button',
       dataTestId: 'view-type-list-btn',
-      isActiveView() { return viewType === this.type },
+      disabled: isTreeViewDisabled,
+      isActiveView() {
+        return viewType === this.type
+      },
       getClassName() {
         return cx(styles.viewTypeBtn, { [styles.active]: this.isActiveView() })
       },
@@ -96,18 +111,21 @@ const KeysHeader = (props: Props) => {
       },
       onClick() {
         handleSwitchView(this.type)
-        dispatch(incrementOnboardStepAction(
-          OnboardingSteps.BrowserTreeView,
-          undefined,
-          () => sendEventTelemetry({
-            event: TelemetryEvent.ONBOARDING_TOUR_ACTION_MADE,
-            eventData: {
-              databaseId: instanceId,
-              step: OnboardingStepName.BrowserTreeView,
-            }
-          })
-        ))
-      }
+        dispatch(
+          incrementOnboardStepAction(
+            OnboardingSteps.BrowserTreeView,
+            undefined,
+            () =>
+              sendEventTelemetry({
+                event: TelemetryEvent.ONBOARDING_TOUR_ACTION_MADE,
+                eventData: {
+                  databaseId: instanceId,
+                  step: OnboardingStepName.BrowserTreeView,
+                },
+              }),
+          ),
+        )
+      },
     },
   ]
 
@@ -116,6 +134,8 @@ const KeysHeader = (props: Props) => {
     height: '36px !important',
   }
 
+  const toggleColumnsConfigVisibility = () => setColumnsConfigShown(!columnsConfigShown)
+
   const handleRefreshKeys = () => {
     dispatch(fetchKeys(
       {
@@ -123,7 +143,16 @@ const KeysHeader = (props: Props) => {
         cursor: '0',
         count: viewType === KeyViewType.Browser ? SCAN_COUNT_DEFAULT : SCAN_TREE_COUNT_DEFAULT,
       },
-      () => dispatch(setBrowserKeyListDataLoaded(searchMode, true)),
+      (data) => {
+        const keys = Array.isArray(data) ? data[0].keys : data.keys;
+
+        if (!keys.length) {
+          dispatch(resetKeyInfo());
+          dispatch(setBrowserSelectedKey(null));
+        }
+
+        dispatch(setBrowserKeyListDataLoaded(searchMode, true));
+      },
       () => dispatch(setBrowserKeyListDataLoaded(searchMode, false)),
     ))
   }
@@ -167,7 +196,6 @@ const KeysHeader = (props: Props) => {
 
     dispatch(resetBrowserTree())
     dispatch(resetKeysData(searchMode))
-    localStorageService.set(BrowserStorageItem.browserViewType, type)
 
     if (!(searchMode === SearchMode.Redisearch && !selectedIndex)) {
       loadKeys(type)
@@ -176,6 +204,30 @@ const KeysHeader = (props: Props) => {
     setTimeout(() => {
       dispatch(changeKeyViewType(type))
     }, 0)
+  }
+
+  const changeColumnsShown = (status: boolean, columnType: BrowserColumns) => {
+    const shown = []
+    const hidden = []
+    const newColumns = status
+      ? [...shownColumns, columnType]
+      : shownColumns.filter((col) => col !== columnType)
+
+    if (columnType === BrowserColumns.TTL) {
+      status ? shown.push(BrowserColumns.TTL) : hidden.push(BrowserColumns.TTL)
+    } else if (columnType === BrowserColumns.Size) {
+      status ? shown.push(BrowserColumns.Size) : hidden.push(BrowserColumns.Size)
+    }
+
+    dispatch(setBrowserShownColumns(newColumns))
+    sendEventTelemetry({
+      event: TelemetryEvent.SHOW_BROWSER_COLUMN_CLICKED,
+      eventData: {
+        databaseId: instanceId,
+        shown,
+        hidden
+      }
+    })
   }
 
   const ViewSwitch = () => (
@@ -194,6 +246,7 @@ const KeysHeader = (props: Props) => {
                 aria-label={view.ariaLabel}
                 onClick={() => view.onClick()}
                 data-testid={view.dataTestId}
+                disabled={view.disabled || false}
               />
             </EuiToolTip>
           ))}
@@ -208,14 +261,14 @@ const KeysHeader = (props: Props) => {
         {({ width }) => (
           <div style={{ width }}>
             <div className={styles.bottom}>
-              <div>
+              <div className={styles.keysSummary}>
                 <KeysSummary
                   items={keysState.keys}
                   totalItemsCount={keysState.total}
                   scanned={
                     isSearched
-                    || (isFiltered && searchMode === SearchMode.Pattern)
-                    || viewType === KeyViewType.Tree ? keysState.scanned : 0
+                      || (isFiltered && searchMode === SearchMode.Pattern)
+                      || viewType === KeyViewType.Tree ? keysState.scanned : 0
                   }
                   loading={loading}
                   showScanMore={
@@ -230,6 +283,8 @@ const KeysHeader = (props: Props) => {
               </div>
               <div className={styles.keysControlsWrapper}>
                 <AutoRefresh
+                  disabled={searchMode === SearchMode.Redisearch && !selectedIndex}
+                  disabledRefreshButtonMessage="Select an index to refresh keys."
                   iconSize="xs"
                   postfix="keys"
                   loading={loading}
@@ -239,8 +294,69 @@ const KeysHeader = (props: Props) => {
                   onRefresh={handleRefreshKeys}
                   onEnableAutoRefresh={handleEnableAutoRefresh}
                   onChangeAutoRefreshRate={handleChangeAutoRefreshRate}
-                  testid="refresh-keys-btn"
+                  testid="keys"
                 />
+                <div className={styles.columnsButtonPopup}>
+                  <EuiPopover
+                    ownFocus={false}
+                    anchorPosition="downLeft"
+                    isOpen={columnsConfigShown}
+                    anchorClassName={styles.anchorWrapper}
+                    panelClassName={styles.popoverWrapper}
+                    closePopover={() => setColumnsConfigShown(false)}
+                    button={(
+                      <EuiButton
+                        size="s"
+                        color="secondary"
+                        iconType={ColumnsIcon}
+                        onClick={toggleColumnsConfigVisibility}
+                        className={styles.columnsButton}
+                        data-testid="btn-columns-actions"
+                        aria-label="columns"
+                      >
+                        <span className={styles.columnsButtonText}>Columns</span>
+                      </EuiButton>
+                    )}
+                  >
+                    <EuiFlexGroup alignItems="center" gutterSize="m">
+                      <EuiFlexItem>
+                        <EuiCheckbox
+                          id="show-key-size"
+                          name="show-key-size"
+                          label="Key size"
+                          checked={shownColumns.includes(BrowserColumns.Size)}
+                          onChange={(e) => changeColumnsShown(e.target.checked, BrowserColumns.Size)}
+                          data-testid="show-key-size"
+                          className={styles.checkbox}
+                        />
+                      </EuiFlexItem>
+                      <EuiFlexItem>
+                        <EuiToolTip
+                          content="Hide the key size to avoid performance issues when working with large keys."
+                          position="top"
+                          display="inlineBlock"
+                          anchorClassName="flex-row"
+                        >
+                          <EuiIcon
+                            className={styles.infoIcon}
+                            type="iInCircle"
+                            size="m"
+                            style={{ cursor: 'pointer' }}
+                            data-testid="key-size-info-icon"
+                          />
+                        </EuiToolTip>
+                      </EuiFlexItem>
+                    </EuiFlexGroup>
+                    <EuiCheckbox
+                      id="show-ttl"
+                      name="show-ttl"
+                      label="TTL"
+                      checked={shownColumns.includes(BrowserColumns.TTL)}
+                      onChange={(e) => changeColumnsShown(e.target.checked, BrowserColumns.TTL)}
+                      data-testid="show-ttl"
+                    />
+                  </EuiPopover>
+                </div>
                 {ViewSwitch()}
               </div>
             </div>

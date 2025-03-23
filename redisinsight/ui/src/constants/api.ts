@@ -1,3 +1,7 @@
+import { getConfig } from 'uiSrc/config'
+
+const riConfig = getConfig()
+
 enum ApiEndpoints {
   DATABASES = 'databases',
   DATABASES_IMPORT = 'databases/import',
@@ -5,6 +9,7 @@ enum ApiEndpoints {
   DATABASES_EXPORT = 'databases/export',
 
   BULK_ACTIONS_IMPORT = 'bulk-actions/import',
+  BULK_ACTIONS_IMPORT_DEFAULT_DATA = 'bulk-actions/import/default-data',
   BULK_ACTIONS_IMPORT_TUTORIAL_DATA = 'bulk-actions/import/tutorial-data',
 
   CA_CERTIFICATES = 'certificates/ca',
@@ -43,6 +48,7 @@ enum ApiEndpoints {
   HASH = 'hash',
   HASH_FIELDS = 'hash/fields',
   HASH_GET_FIELDS = 'hash/get-fields',
+  HASH_TTL = 'hash/ttl',
 
   LIST = 'list',
   LIST_GET_ELEMENTS = 'list/get-elements',
@@ -106,17 +112,12 @@ enum ApiEndpoints {
   RECOMMENDATIONS = 'recommendations',
   RECOMMENDATIONS_READ = 'recommendations/read',
 
-  TRIGGERED_FUNCTIONS_LIBRARIES = 'triggered-functions/libraries',
-  TRIGGERED_FUNCTIONS_FUNCTIONS = 'triggered-functions/functions',
-  TRIGGERED_FUNCTIONS_GET_LIBRARY = 'triggered-functions/get-library',
-  TRIGGERED_FUNCTIONS_REPLACE_LIBRARY = 'triggered-functions/library/replace',
-  TRIGGERED_FUNCTIONS_LIBRARY = 'triggered-functions/library',
-
   NOTIFICATIONS = 'notifications',
   NOTIFICATIONS_READ = 'notifications/read',
 
   REDISEARCH = 'redisearch',
   REDISEARCH_SEARCH = 'redisearch/search',
+  REDISEARCH_INFO = 'redisearch/info',
   HISTORY = 'history',
 
   FEATURES = 'features',
@@ -124,6 +125,7 @@ enum ApiEndpoints {
   CLOUD_ME = 'cloud/me',
   CLOUD_ME_JOBS = 'cloud/me/jobs',
   CLOUD_ME_ACCOUNTS = 'cloud/me/accounts',
+  CLOUD_ME_LOGOUT = 'cloud/me/logout',
   CLOUD_CURRENT = 'current',
 
   CLOUD_SUBSCRIPTION_PLANS = 'cloud/me/subscription/plans',
@@ -134,25 +136,52 @@ enum ApiEndpoints {
   CLOUD_ME_AUTODISCOVERY_DATABASES = 'cloud/me/autodiscovery/databases',
   CLOUD_CAPI_KEYS = 'cloud/me/capi-keys',
 
+  AI_ASSISTANT_CHATS = 'ai/assistant/chats',
+  AI_EXPERT = 'ai/expert',
+
   ANALYTICS_SEND_EVENT = 'analytics/send-event',
   ANALYTICS_SEND_PAGE = 'analytics/send-page',
+
+  RDI_INSTANCES = 'rdi',
+  RDI_PIPELINE = 'pipeline',
+  RDI_PIPELINE_SCHEMA = 'pipeline/schema',
+  RDI_DEPLOY_PIPELINE = 'pipeline/deploy',
+  RDI_TEST_CONNECTIONS = 'pipeline/test-connections',
+  RDI_PIPELINE_STRATEGIES = 'pipeline/strategies',
+  RDI_JOB_TEMPLATE = 'pipeline/job/template',
+  RDI_CONFIG_TEMPLATE = 'pipeline/config/template',
+  RDI_PIPELINE_JOB_FUNCTIONS = 'pipeline/job-functions',
+  RDI_STATISTICS = 'statistics',
+  RDI_PIPELINE_STATUS = 'pipeline/status',
+  RDI_PIPELINE_STOP = 'pipeline/stop',
+  RDI_PIPELINE_START = 'pipeline/start',
+  RDI_PIPELINE_RESET = 'pipeline/reset',
 }
 
 export enum CustomHeaders {
   DbIndex = 'ri-db-index',
   WindowId = 'x-window-id',
+  CsrfToken = 'X-CSRF-Token',
 }
 
 export const DEFAULT_SEARCH_MATCH = '*'
 
-const SCAN_COUNT_DEFAULT_ENV = process.env.SCAN_COUNT_DEFAULT || '500'
-const PIPELINE_COUNT_DEFAULT_ENV = process.env.PIPELINE_COUNT_DEFAULT || '5'
-const SCAN_TREE_COUNT_DEFAULT_ENV = process.env.SCAN_TREE_COUNT_DEFAULT || '10000'
-
-export const SCAN_COUNT_DEFAULT = parseInt(SCAN_COUNT_DEFAULT_ENV, 10)
-export const PIPELINE_COUNT_DEFAULT = parseInt(PIPELINE_COUNT_DEFAULT_ENV, 10)
-export const SCAN_TREE_COUNT_DEFAULT = parseInt(SCAN_TREE_COUNT_DEFAULT_ENV, 10)
+export const PIPELINE_COUNT_DEFAULT = riConfig.workbench.pipelineCountDefault
+export const SCAN_COUNT_DEFAULT = riConfig.browser.scanCountDefault
+export const SCAN_TREE_COUNT_DEFAULT = riConfig.browser.scanTreeCountDefault
 export const SCAN_STREAM_START_DEFAULT = '-'
 export const SCAN_STREAM_END_DEFAULT = '+'
+
+export const CLOUD_AUTH_API_ENDPOINTS = [
+  ApiEndpoints.CLOUD_ME,
+  ApiEndpoints.CLOUD_ME_JOBS,
+  ApiEndpoints.CLOUD_ME_ACCOUNTS,
+  ApiEndpoints.CLOUD_SUBSCRIPTION_PLANS,
+  ApiEndpoints.CLOUD_ME_AUTODISCOVERY_ACCOUNT,
+  ApiEndpoints.CLOUD_ME_AUTODISCOVERY_SUBSCRIPTIONS,
+  ApiEndpoints.CLOUD_ME_AUTODISCOVERY_GET_DATABASES,
+  ApiEndpoints.CLOUD_ME_AUTODISCOVERY_DATABASES,
+  ApiEndpoints.CLOUD_CAPI_KEYS,
+]
 
 export default ApiEndpoints

@@ -32,9 +32,13 @@ fixture `Browser - Specify Keys to Scan`
     .beforeEach(async() => {
         await databaseHelper.acceptLicenseTermsAndAddDatabaseApi(ossStandaloneConfig);
     })
-    .afterEach(async() => {
+    .afterEach(async t => {
         //Clear and delete database
         await browserPage.Cli.sendCommandInCli(`DEL ${keys.join(' ')}`);
+        await t.click(myRedisDatabasePage.NavigationPanel.settingsButton);
+        await t.click(settingsPage.accordionAdvancedSettings);
+        await settingsPage.changeKeysToScanValue('10000');
+        await settingsPage.reloadPage();
         await databaseAPIRequests.deleteStandaloneDatabaseApi(ossStandaloneConfig);
     });
 test('Verify that the user can see this number of keys applied to new filter requests and to "scan more" functionality in Browser page', async t => {

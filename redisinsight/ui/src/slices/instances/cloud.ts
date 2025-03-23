@@ -18,6 +18,7 @@ import {
   InitialStateCloud,
   InstanceRedisCloud,
   LoadedCloud,
+  OAuthSocialAction,
 } from '../interfaces'
 import { addErrorNotification } from '../app/notifications'
 import { AppDispatch, RootState } from '../store'
@@ -29,7 +30,8 @@ export const initialState: InitialStateCloud = {
   dataAdded: [],
   subscriptions: null,
   credentials: null,
-  isAutodiscoverySSO: false,
+  ssoFlow: undefined,
+  isRecommendedSettings: undefined,
   account: {
     error: '',
     data: null,
@@ -148,8 +150,11 @@ const cloudSlice = createSlice({
     resetLoadedRedisCloud: (state, { payload }: PayloadAction<LoadedCloud>) => {
       state.loaded[payload] = false
     },
-    setIsAutodiscoverySSO: (state, { payload }: PayloadAction<boolean>) => {
-      state.isAutodiscoverySSO = payload
+    setSSOFlow: (state, { payload }: PayloadAction<Maybe<OAuthSocialAction>>) => {
+      state.ssoFlow = payload
+    },
+    setIsRecommendedSettingsSSO: (state, { payload }: PayloadAction<Maybe<boolean>>) => {
+      state.isRecommendedSettings = payload
     },
   },
 })
@@ -171,7 +176,8 @@ export const {
   resetDataRedisCloud,
   resetSubscriptionsRedisCloud,
   resetLoadedRedisCloud,
-  setIsAutodiscoverySSO,
+  setSSOFlow,
+  setIsRecommendedSettingsSSO
 } = cloudSlice.actions
 
 // A selector
@@ -188,22 +194,21 @@ const generateAuthHeaders = (credentials: Nullable<ICredentialsRedisCloud>) => (
 // Asynchronous thunk action
 export function fetchSubscriptionsRedisCloud(
   credentials: Nullable<ICredentialsRedisCloud>,
+  isWithinOauth?: boolean,
   onSuccessAction?: () => void,
   onFailAction?: () => void
 ) {
-  return async (dispatch: AppDispatch, stateInit: () => RootState) => {
+  return async (dispatch: AppDispatch) => {
     dispatch(loadSubscriptionsRedisCloud())
 
     try {
-      const state = stateInit()
-      const { isAutodiscoverySSO } = state.connections.cloud
       const { data, status } = await apiService.get(
-        isAutodiscoverySSO
+        isWithinOauth
           ? `${ApiEndpoints.CLOUD_ME_AUTODISCOVERY_SUBSCRIPTIONS}`
           : `${ApiEndpoints.REDIS_CLOUD_SUBSCRIPTIONS}`,
         {
           headers: {
-            ...(!isAutodiscoverySSO ? generateAuthHeaders(credentials) : {}),
+            ...(!isWithinOauth ? generateAuthHeaders(credentials) : {}),
           }
         }
       )
@@ -216,7 +221,7 @@ export function fetchSubscriptionsRedisCloud(
           })
         )
         onSuccessAction?.()
-        dispatch<any>(fetchAccountRedisCloud(credentials))
+        dispatch<any>(fetchAccountRedisCloud(credentials, isWithinOauth))
       }
     } catch (error) {
       const errorMessage = getApiErrorMessage(error as EnhancedAxiosError)
@@ -230,20 +235,21 @@ export function fetchSubscriptionsRedisCloud(
 }
 
 // Asynchronous thunk action
-export function fetchAccountRedisCloud(credentials: Nullable<ICredentialsRedisCloud>) {
-  return async (dispatch: AppDispatch, stateInit: () => RootState) => {
+export function fetchAccountRedisCloud(
+  credentials: Nullable<ICredentialsRedisCloud>,
+  isWithinOauth?: boolean,
+) {
+  return async (dispatch: AppDispatch) => {
     dispatch(loadAccountRedisCloud())
 
     try {
-      const state = stateInit()
-      const { isAutodiscoverySSO } = state.connections.cloud
       const { data, status } = await apiService.get(
-        isAutodiscoverySSO
+        isWithinOauth
           ? `${ApiEndpoints.CLOUD_ME_AUTODISCOVERY_ACCOUNT}`
           : `${ApiEndpoints.REDIS_CLOUD_ACCOUNT}`,
         {
           headers: {
-            ...(!isAutodiscoverySSO ? generateAuthHeaders(credentials) : {}),
+            ...(!isWithinOauth ? generateAuthHeaders(credentials) : {}),
           }
         }
       )
@@ -252,26 +258,29 @@ export function fetchAccountRedisCloud(credentials: Nullable<ICredentialsRedisCl
         dispatch(loadAccountRedisCloudSuccess({ data }))
       }
     } catch (error) {
-      const errorMessage = getApiErrorMessage(error)
+      const errorMessage = getApiErrorMessage(error as EnhancedAxiosError)
+      const err = getAxiosError(error as EnhancedAxiosError)
+
       dispatch(loadAccountRedisCloudFailure(errorMessage))
-      dispatch(addErrorNotification(error))
+      dispatch(addErrorNotification(err))
     }
   }
 }
 
 // Asynchronous thunk action
-export function fetchInstancesRedisCloud(payload: {
-  subscriptions: Maybe<Pick<InstanceRedisCloud, 'subscriptionId' | 'subscriptionType' | 'free'>>[];
-  credentials: Nullable<ICredentialsRedisCloud>;
-}) {
-  return async (dispatch: AppDispatch, stateInit: () => RootState) => {
+export function fetchInstancesRedisCloud(
+  payload: {
+    subscriptions: Maybe<Pick<InstanceRedisCloud, 'subscriptionId' | 'subscriptionType' | 'free'>>[],
+    credentials: Nullable<ICredentialsRedisCloud>,
+  },
+  isWithinOauth?: boolean
+) {
+  return async (dispatch: AppDispatch) => {
     dispatch(loadInstancesRedisCloud())
 
     try {
-      const state = stateInit()
-      const { isAutodiscoverySSO } = state.connections.cloud
       const { data, status } = await apiService.post(
-        isAutodiscoverySSO
+        isWithinOauth
           ? `${ApiEndpoints.CLOUD_ME_AUTODISCOVERY_GET_DATABASES}`
           : `${ApiEndpoints.REDIS_CLOUD_GET_DATABASES}`,
         {
@@ -279,7 +288,7 @@ export function fetchInstancesRedisCloud(payload: {
         },
         {
           headers: {
-            ...(!isAutodiscoverySSO ? generateAuthHeaders(payload.credentials) : {}),
+            ...(!isWithinOauth ? generateAuthHeaders(payload.credentials) : {}),
           }
         }
       )
@@ -290,26 +299,29 @@ export function fetchInstancesRedisCloud(payload: {
         )
       }
     } catch (error) {
-      const errorMessage = getApiErrorMessage(error)
+      const errorMessage = getApiErrorMessage(error as EnhancedAxiosError)
+      const err = getAxiosError(error as EnhancedAxiosError)
+
       dispatch(loadInstancesRedisCloudFailure(errorMessage))
-      dispatch(addErrorNotification(error))
+      dispatch(addErrorNotification(err))
     }
   }
 }
 
 // Asynchronous thunk action
-export function addInstancesRedisCloud(payload: {
-  databases: Pick<InstanceRedisCloud, 'subscriptionId' | 'databaseId' | 'free'>[];
-  credentials: Nullable<ICredentialsRedisCloud>;
-}) {
-  return async (dispatch: AppDispatch, stateInit: () => RootState) => {
+export function addInstancesRedisCloud(
+  payload: {
+    databases: Pick<InstanceRedisCloud, 'subscriptionId' | 'databaseId' | 'free'>[];
+    credentials: Nullable<ICredentialsRedisCloud>;
+  },
+  isWithinOauth?: boolean
+) {
+  return async (dispatch: AppDispatch) => {
     dispatch(createInstancesRedisCloud())
 
     try {
-      const state = stateInit()
-      const { isAutodiscoverySSO } = state.connections.cloud
       const { data, status } = await apiService.post(
-        isAutodiscoverySSO
+        isWithinOauth
           ? `${ApiEndpoints.CLOUD_ME_AUTODISCOVERY_DATABASES}`
           : `${ApiEndpoints.REDIS_CLOUD_DATABASES}`,
         {
@@ -317,7 +329,7 @@ export function addInstancesRedisCloud(payload: {
         },
         {
           headers: {
-            ...(!isAutodiscoverySSO ? generateAuthHeaders(payload.credentials) : {}),
+            ...(!isWithinOauth ? generateAuthHeaders(payload.credentials) : {}),
           }
         }
       )
@@ -330,9 +342,11 @@ export function addInstancesRedisCloud(payload: {
         dispatch(createInstancesRedisCloudSuccess(data))
       }
     } catch (error) {
-      const errorMessage = getApiErrorMessage(error)
+      const errorMessage = getApiErrorMessage(error as EnhancedAxiosError)
+      const err = getAxiosError(error as EnhancedAxiosError)
+
       dispatch(createInstancesRedisCloudFailure(errorMessage))
-      dispatch(addErrorNotification(error))
+      dispatch(addErrorNotification(err))
     }
   }
 }

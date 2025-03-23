@@ -1,8 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { mockDatabase } from 'src/__mocks__';
+import { mockDatabase, mockSessionMetadata } from 'src/__mocks__';
 import { TelemetryEvents } from 'src/constants';
 import { PubSubAnalyticsService } from './pub-sub.analytics.service';
+import { SubscriptionType } from './constants';
 
 const instanceId = mockDatabase.id;
 
@@ -30,11 +31,13 @@ describe('PubSubAnalyticsService', () => {
   describe('sendMessagePublishedEvent', () => {
     it('should emit sendMessagePublished event', () => {
       service.sendMessagePublishedEvent(
+        mockSessionMetadata,
         instanceId,
         affected,
       );
 
       expect(sendEventMethod).toHaveBeenCalledWith(
+        mockSessionMetadata,
         TelemetryEvents.PubSubMessagePublished,
         {
           databaseId: instanceId,
@@ -45,15 +48,36 @@ describe('PubSubAnalyticsService', () => {
   });
 
   describe('sendChannelSubscribeEvent', () => {
-    it('should emit sendChannelSubscribe event', () => {
+    it('should emit sendChannelSubscribe event for all channels', () => {
       service.sendChannelSubscribeEvent(
+        mockSessionMetadata,
         instanceId,
+        [{ channel: '*', type: SubscriptionType.Subscribe }],
       );
 
       expect(sendEventMethod).toHaveBeenCalledWith(
+        mockSessionMetadata,
         TelemetryEvents.PubSubChannelSubscribed,
         {
           databaseId: instanceId,
+          allChannels: 'yes',
+        },
+      );
+    });
+
+    it('should emit sendChannelSubscribe event not for all channels', () => {
+      service.sendChannelSubscribeEvent(
+        mockSessionMetadata,
+        instanceId,
+        [{ channel: '1', type: SubscriptionType.Subscribe }],
+      );
+
+      expect(sendEventMethod).toHaveBeenCalledWith(
+        mockSessionMetadata,
+        TelemetryEvents.PubSubChannelSubscribed,
+        {
+          databaseId: instanceId,
+          allChannels: 'no',
         },
       );
     });
@@ -62,10 +86,12 @@ describe('PubSubAnalyticsService', () => {
   describe('sendChannelUnsubscribeEvent', () => {
     it('should emit sendChannelUnsubscribe event', () => {
       service.sendChannelUnsubscribeEvent(
+        mockSessionMetadata,
         instanceId,
       );
 
       expect(sendEventMethod).toHaveBeenCalledWith(
+        mockSessionMetadata,
         TelemetryEvents.PubSubChannelUnsubscribed,
         {
           databaseId: instanceId,

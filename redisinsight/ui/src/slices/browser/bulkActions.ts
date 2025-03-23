@@ -1,11 +1,12 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 
-import { AxiosError } from 'axios'
+import axios, { AxiosError } from 'axios'
 import { ApiEndpoints, BulkActionsType, MAX_BULK_ACTION_ERRORS_LENGTH } from 'uiSrc/constants'
 import { apiService } from 'uiSrc/services'
-import { getApiErrorMessage, getUrl, isStatusSuccessful } from 'uiSrc/utils'
+import { getApiErrorMessage, getUrl, isStatusSuccessful, Maybe, Nullable } from 'uiSrc/utils'
 
-import { addErrorNotification } from 'uiSrc/slices/app/notifications'
+import { addErrorNotification, addMessageNotification } from 'uiSrc/slices/app/notifications'
+import successMessages from 'uiSrc/components/notifications/success-messages'
 import { AppDispatch, RootState } from '../store'
 import { StateBulkActions, IBulkActionOverview } from '../interfaces'
 
@@ -38,41 +39,32 @@ const bulkActionsSlice = createSlice({
   initialState,
   reducers: {
     setBulkActionsInitialState: () => initialState,
-
     setBulkDeleteStartAgain: (state) => {
       state.bulkDelete = initialState.bulkDelete
       state.isConnected = false
     },
-
     setBulkUploadStartAgain: (state) => {
       state.bulkUpload = initialState.bulkUpload
       state.isConnected = false
     },
-
     toggleBulkActions: (state) => {
       state.isShowBulkActions = !state.isShowBulkActions
     },
-
     setBulkActionConnected: (state, { payload }: PayloadAction<boolean>) => {
       state.isConnected = payload
     },
-
     setLoading: (state, { payload }: PayloadAction<boolean>) => {
       state.loading = payload
     },
-
     setBulkDeleteLoading: (state, { payload }: PayloadAction<boolean>) => {
       state.bulkDelete.loading = payload
     },
-
     setBulkActionType: (state, { payload }: PayloadAction<BulkActionsType>) => {
       state.selectedBulkAction.type = payload
     },
-
     toggleBulkDeleteActionTriggered: (state) => {
       state.bulkDelete.isActionTriggered = !state.bulkDelete.isActionTriggered
     },
-
     setDeleteOverview: (state, { payload }: PayloadAction<IBulkActionOverview>) => {
       let errors = state.bulkDelete.overview?.summary?.errors || []
 
@@ -85,33 +77,45 @@ const bulkActionsSlice = createSlice({
         }
       }
     },
-
+    setDeleteOverviewStatus: (state, { payload }) => {
+      if (state.bulkDelete.overview) {
+        state.bulkDelete.overview.status = payload
+      }
+    },
     disconnectBulkDeleteAction: (state) => {
       state.bulkDelete.loading = false
       state.bulkDelete.isActionTriggered = false
       state.isConnected = false
     },
-
     // bulk delete
     bulkDeleteSuccess: (state) => {
       state.bulkDelete.loading = false
     },
-
     bulkUpload: (state) => {
       state.bulkUpload.loading = true
       state.bulkUpload.error = ''
     },
-
     bulkUploadSuccess: (state, { payload }: PayloadAction<{ data: IBulkActionOverview, fileName?: string }>) => {
       state.bulkUpload.loading = false
       state.bulkUpload.overview = payload.data
       state.bulkUpload.fileName = payload.fileName
     },
-
-    bulkUploadFailed: (state, { payload }) => {
+    bulkUploadFailed: (state, { payload }: PayloadAction<Maybe<string>>) => {
       state.bulkUpload.loading = false
-      state.bulkUpload.error = payload
+
+      if (payload) {
+        state.bulkUpload.error = payload
+      }
     },
+    bulkImportDefaultData: (state) => {
+      state.loading = true
+    },
+    bulkImportDefaultDataSuccess: (state) => {
+      state.loading = false
+    },
+    bulkImportDefaultDataFailed: (state) => {
+      state.loading = false
+    }
   },
 })
 
@@ -127,11 +131,15 @@ export const {
   disconnectBulkDeleteAction,
   toggleBulkDeleteActionTriggered,
   setDeleteOverview,
+  setDeleteOverviewStatus,
   setBulkActionsInitialState,
   bulkDeleteSuccess,
   bulkUpload,
   bulkUploadFailed,
   bulkUploadSuccess,
+  bulkImportDefaultData,
+  bulkImportDefaultDataSuccess,
+  bulkImportDefaultDataFailed,
 } = bulkActionsSlice.actions
 
 // Selectors
@@ -150,6 +158,9 @@ export const bulkActionsUploadSummarySelector = (state: RootState) =>
 // The reducer
 export default bulkActionsSlice.reducer
 
+// eslint-disable-next-line import/no-mutable-exports
+export let uploadController: Nullable<AbortController> = null
+
 // Thunk actions
 // Asynchronous thunk action
 export function bulkUploadDataAction(
@@ -162,6 +173,9 @@ export function bulkUploadDataAction(
     dispatch(bulkUpload())
 
     try {
+      uploadController?.abort()
+      uploadController = new AbortController()
+
       const { status, data } = await apiService.post(
         getUrl(
           id,
@@ -172,19 +186,67 @@ export function bulkUploadDataAction(
           headers: {
             Accept: 'application/json',
             'Content-Type': 'multipart/form-data'
-          }
+          },
+          signal: uploadController.signal
         }
       )
+
+      uploadController = null
 
       if (isStatusSuccessful(status)) {
         dispatch(bulkUploadSuccess({ data, fileName: uploadFile.fileName }))
         onSuccessAction?.()
       }
     } catch (error) {
-      const errorMessage = getApiErrorMessage(error as AxiosError)
+      // show error when request wasn't aborted
+      if (!axios.isCancel(error)) {
+        const errorMessage = getApiErrorMessage(error as AxiosError)
+        dispatch(addErrorNotification(error as AxiosError))
+        dispatch(bulkUploadFailed(errorMessage))
+        onFailAction?.()
+      } else {
+        dispatch(bulkUploadFailed())
+      }
+    }
+  }
+}
+
+export function bulkImportDefaultDataAction(
+  id: string,
+  onSuccessAction?: () => void,
+  onFailAction?: () => void
+) {
+  return async (dispatch: AppDispatch) => {
+    dispatch(bulkImportDefaultData())
+
+    try {
+      const { status, data } = await apiService.post(
+        getUrl(
+          id,
+          ApiEndpoints.BULK_ACTIONS_IMPORT_DEFAULT_DATA
+        )
+      )
+
+      if (isStatusSuccessful(status)) {
+        dispatch(bulkImportDefaultDataSuccess())
+        dispatch(
+          addMessageNotification(
+            successMessages.UPLOAD_DATA_BULK(data as IBulkActionOverview)
+          )
+        )
+        onSuccessAction?.()
+      }
+    } catch (error) {
       dispatch(addErrorNotification(error as AxiosError))
-      dispatch(bulkUploadFailed(errorMessage))
+      dispatch(bulkImportDefaultDataFailed())
       onFailAction?.()
     }
+  }
+}
+
+export function resetBulkActions() {
+  return async (dispatch: AppDispatch) => {
+    uploadController?.abort()
+    dispatch(setBulkActionsInitialState())
   }
 }

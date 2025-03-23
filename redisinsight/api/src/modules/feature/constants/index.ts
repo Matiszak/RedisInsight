@@ -22,11 +22,18 @@ export enum FeatureConfigConfigDestination {
 export enum KnownFeatures {
   InsightsRecommendations = 'insightsRecommendations',
   CloudSso = 'cloudSso',
+  CloudSsoRecommendedSettings = 'cloudSsoRecommendedSettings',
   RedisModuleFilter = 'redisModuleFilter',
+  RedisClient = 'redisClient',
+  DocumentationChat = 'documentationChat',
+  DatabaseChat = 'databaseChat',
+  Rdi = 'redisDataIntegration',
+  HashFieldExpiration = 'hashFieldExpiration',
+  EnhancedCloudUI = 'enhancedCloudUI',
 }
 
 export interface IFeatureFlag {
   name: string;
   storage: string;
-  factory?: () => Feature;
+  factory?: () => Partial<Feature>;
 }

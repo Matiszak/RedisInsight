@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseRepository } from 'src/modules/database/repositories/database.repository';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindOptionsWhere, Repository } from 'typeorm';
+import {
+  FindOptionsWhere, In, Not, Repository,
+} from 'typeorm';
 import { get, set, omit } from 'lodash';
 import { DatabaseEntity } from 'src/modules/database/entities/database.entity';
 import { Database } from 'src/modules/database/models/database';
@@ -12,6 +14,7 @@ import { CaCertificateRepository } from 'src/modules/certificate/repositories/ca
 import { ClientCertificateRepository } from 'src/modules/certificate/repositories/client-certificate.repository';
 import { SshOptionsEntity } from 'src/modules/ssh/entities/ssh-options.entity';
 import { DatabaseAlreadyExistsException } from 'src/modules/database/exeptions';
+import { SessionMetadata } from 'src/common/models';
 
 @Injectable()
 export class LocalDatabaseRepository extends DatabaseRepository {
@@ -31,12 +34,12 @@ export class LocalDatabaseRepository extends DatabaseRepository {
 
   constructor(
     @InjectRepository(DatabaseEntity)
-    private readonly repository: Repository<DatabaseEntity>,
+    protected readonly repository: Repository<DatabaseEntity>,
     @InjectRepository(SshOptionsEntity)
-    private readonly sshOptionsRepository: Repository<SshOptionsEntity>,
-    private readonly caCertificateRepository: CaCertificateRepository,
-    private readonly clientCertificateRepository: ClientCertificateRepository,
-    private readonly encryptionService: EncryptionService,
+    protected readonly sshOptionsRepository: Repository<SshOptionsEntity>,
+    protected readonly caCertificateRepository: CaCertificateRepository,
+    protected readonly clientCertificateRepository: ClientCertificateRepository,
+    protected readonly encryptionService: EncryptionService,
   ) {
     super();
     this.modelEncryptor = new ModelEncryptor(encryptionService, ['password', 'sentinelMasterPassword']);
@@ -49,7 +52,7 @@ export class LocalDatabaseRepository extends DatabaseRepository {
   /**
    * @inheritDoc
    */
-  public async exists(id: string): Promise<boolean> {
+  public async exists(_: SessionMetadata, id: string): Promise<boolean> {
     return !!await this.repository
       .createQueryBuilder('database')
       .where({ id })
@@ -61,6 +64,7 @@ export class LocalDatabaseRepository extends DatabaseRepository {
    * @inheritDoc
    */
   public async get(
+    _: SessionMetadata,
     id: string,
     ignoreEncryptionErrors: boolean = false,
     omitFields: string[] = [],
@@ -84,13 +88,17 @@ export class LocalDatabaseRepository extends DatabaseRepository {
   /**
    * @inheritDoc
    */
-  public async list(): Promise<Database[]> {
+  public async list(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _: SessionMetadata,
+  ): Promise<Database[]> {
     const entities = await this.repository
       .createQueryBuilder('d')
       .leftJoinAndSelect('d.cloudDetails', 'cd')
       .select([
         'd.id', 'd.name', 'd.host', 'd.port', 'd.db', 'd.new', 'd.timeout',
         'd.connectionType', 'd.modules', 'd.lastConnection', 'd.provider', 'd.version', 'cd',
+        'd.createdAt',
       ])
       .getMany();
 
@@ -99,10 +107,11 @@ export class LocalDatabaseRepository extends DatabaseRepository {
 
   /**
    * Create database with encrypted sensitive fields
+   * @param _
    * @param database
    * @param uniqueCheck
    */
-  public async create(database: Database, uniqueCheck: boolean): Promise<Database> {
+  public async create(_: SessionMetadata, database: Database, uniqueCheck: boolean): Promise<Database> {
     if (uniqueCheck) {
       await this.checkUniqueness(database);
     }
@@ -126,7 +135,7 @@ export class LocalDatabaseRepository extends DatabaseRepository {
    * @param database
    * @throws TBD
    */
-  public async update(id: string, database: Partial<Database>): Promise<Database> {
+  public async update(sessionMetadata: SessionMetadata, id: string, database: Partial<Database>): Promise<Database> {
     const oldEntity = await this.decryptEntity((await this.repository.findOneBy({ id })), true);
     const newEntity = classToClass(DatabaseEntity, await this.populateCertificates(database as Database));
 
@@ -156,13 +165,13 @@ export class LocalDatabaseRepository extends DatabaseRepository {
         .execute();
     }
 
-    return this.get(id);
+    return this.get(sessionMetadata, id);
   }
 
   /**
    * @inheritDoc
    */
-  public async delete(id: string): Promise<void> {
+  public async delete(_: SessionMetadata, id: string): Promise<void> {
     await this.repository.delete(id);
   }
 
@@ -255,5 +264,21 @@ export class LocalDatabaseRepository extends DatabaseRepository {
         throw new DatabaseAlreadyExistsException(existingDatabase.id);
       }
     }
+  }
+
+  /**
+   * @inheritDoc
+   */
+  async cleanupPreSetup(excludeIds?: string[]): Promise<{ affected: number }> {
+    const { affected } = await this.repository
+      .createQueryBuilder()
+      .delete()
+      .where({
+        isPreSetup: true,
+        id: Not(In(excludeIds)),
+      })
+      .execute();
+
+    return { affected };
   }
 }

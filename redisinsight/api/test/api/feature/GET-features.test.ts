@@ -27,7 +27,7 @@ const waitForFlags = async (flags: any, action?: Function) => {
     }
 
     client.once('features', (data) => {
-      expect(flags).to.deep.eq(data);
+      expect(flags.features).to.deep.eq(data.features);
       res(true);
     })
     setTimeout(() => {
@@ -75,25 +75,29 @@ describe('GET /features', () => {
               name: 'insightsRecommendations',
             },
             cloudSso: {
-              flag: false,
+              flag: true,
               name: 'cloudSso',
             },
           },
         }, syncEndpoint);
       },
       statusCode: 200,
-      responseBody: {
-        features: {
+      checkFn: async ({ body }) => {
+        const [config] = await featureConfigRepository.find();
+
+        expect(body.features).to.deep.eq({
           insightsRecommendations: {
             flag: false,
             name: 'insightsRecommendations',
           },
           cloudSso: {
-            flag: false,
+            flag: true,
             name: 'cloudSso',
           },
-        }
-      }
+        });
+        expect(body.controlNumber).to.eq(config.controlNumber);
+        expect(body.controlGroup).to.be.a('string');
+      },
     },
     {
       name: 'Should return true since controlNumber is inside range',
@@ -124,7 +128,7 @@ describe('GET /features', () => {
               name: 'insightsRecommendations',
             },
             cloudSso: {
-              flag: false,
+              flag: true,
               name: 'cloudSso',
             },
           },
@@ -138,7 +142,7 @@ describe('GET /features', () => {
             name: 'insightsRecommendations',
           },
           cloudSso: {
-            flag: false,
+            flag: true,
             name: 'cloudSso',
           },
         }
@@ -176,7 +180,7 @@ describe('GET /features', () => {
               name: 'insightsRecommendations',
             },
             cloudSso: {
-              flag: false,
+              flag: true,
               name: 'cloudSso',
             },
           },
@@ -190,7 +194,7 @@ describe('GET /features', () => {
             name: 'insightsRecommendations',
           },
           cloudSso: {
-            flag: false,
+            flag: true,
             name: 'cloudSso',
           },
         }
@@ -207,7 +211,7 @@ describe('GET /features', () => {
                 name: 'insightsRecommendations',
               },
               cloudSso: {
-                flag: false,
+                flag: true,
                 name: 'cloudSso',
               },
             },
@@ -228,7 +232,7 @@ describe('GET /features', () => {
             name: 'insightsRecommendations',
           },
           cloudSso: {
-            flag: false,
+            flag: true,
             name: 'cloudSso',
           },
         }

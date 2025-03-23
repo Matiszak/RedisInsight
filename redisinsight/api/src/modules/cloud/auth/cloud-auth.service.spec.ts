@@ -1,19 +1,30 @@
 import axios from 'axios';
 import { CloudAuthService } from 'src/modules/cloud/auth/cloud-auth.service';
 import {
-  mockCloudAuthAnalytics, mockCloudAuthCode,
-  mockCloudAuthGithubAuthUrl, mockCloudAuthGithubCallbackQueryObject,
+  mockCloudAccessTokenNew,
+  mockCloudAuthAnalytics,
+  mockCloudAuthCode,
+  mockCloudAuthGithubAuthUrl,
+  mockCloudAuthGithubCallbackQueryObject,
   mockCloudAuthGithubRequest,
-  mockCloudAuthGoogleAuthUrl, mockCloudAuthGoogleCallbackQueryObject,
-  mockCloudAuthGoogleRequest, mockCloudAuthGoogleTokenUrl, mockCloudAuthResponse,
+  mockCloudAuthGoogleAuthUrl,
+  mockCloudAuthGoogleCallbackQueryObject,
+  mockCloudAuthGoogleRenewTokenUrl,
+  mockCloudAuthGoogleRequest,
+  mockCloudAuthGoogleRevokeTokenUrl,
+  mockCloudAuthGoogleTokenUrl,
+  mockCloudAuthResponse,
+  mockCloudRefreshTokenNew,
   mockGithubIdpCloudAuthStrategy,
-  mockGoogleIdpCloudAuthStrategy, mockTokenResponse,
+  mockGoogleIdpCloudAuthStrategy, mockSsoIdpCloudAuthStrategy,
+  mockTokenResponse,
+  mockTokenResponseNew,
 } from 'src/__mocks__/cloud-auth';
 import { Test, TestingModule } from '@nestjs/testing';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CloudSessionService } from 'src/modules/cloud/session/cloud-session.service';
 import {
-  mockAxiosBadRequestError, mockCloudSessionService, mockSessionMetadata, MockType,
+  mockAxiosBadRequestError, mockCloudApiAuthDto, mockCloudSessionService, mockSessionMetadata, MockType,
 } from 'src/__mocks__';
 import { GithubIdpCloudAuthStrategy } from 'src/modules/cloud/auth/auth-strategy/github-idp.cloud.auth-strategy';
 import { GoogleIdpCloudAuthStrategy } from 'src/modules/cloud/auth/auth-strategy/google-idp.cloud.auth-strategy';
@@ -22,10 +33,16 @@ import { CloudAuthIdpType, CloudAuthStatus } from 'src/modules/cloud/auth/models
 import {
   CloudOauthMisconfigurationException,
   CloudOauthMissedRequiredDataException,
+  CloudOauthUnexpectedErrorException,
   CloudOauthUnknownAuthorizationRequestException,
 } from 'src/modules/cloud/auth/exceptions';
 import { InternalServerErrorException } from '@nestjs/common';
 import { CloudSsoFeatureStrategy } from 'src/modules/cloud/cloud-sso.feature.flag';
+import { CloudApiUnauthorizedException } from 'src/modules/cloud/common/exceptions';
+import { SsoIdpCloudAuthStrategy } from 'src/modules/cloud/auth/auth-strategy/sso-idp.cloud.auth-strategy';
+import {
+  CloudOauthSsoUnsupportedEmailException,
+} from 'src/modules/cloud/auth/exceptions/cloud-oauth.sso-unsupported-email.exception';
 
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 jest.mock('axios');
@@ -34,10 +51,11 @@ describe('CloudAuthService', () => {
   let service: CloudAuthService;
   let analytics: MockType<CloudAuthAnalytics>;
   let sessionService: MockType<CloudSessionService>;
+  let ssoIdpCLoudAuthStrategy: MockType<SsoIdpCloudAuthStrategy>;
 
   beforeEach(async () => {
+    jest.clearAllMocks();
     jest.mock('axios', () => mockedAxios);
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         EventEmitter2,
@@ -55,6 +73,10 @@ describe('CloudAuthService', () => {
           useFactory: mockGoogleIdpCloudAuthStrategy,
         },
         {
+          provide: SsoIdpCloudAuthStrategy,
+          useFactory: mockSsoIdpCloudAuthStrategy,
+        },
+        {
           provide: CloudAuthAnalytics,
           useFactory: mockCloudAuthAnalytics,
         },
@@ -64,6 +86,7 @@ describe('CloudAuthService', () => {
     service = await module.get(CloudAuthService);
     analytics = await module.get(CloudAuthAnalytics);
     sessionService = await module.get(CloudSessionService);
+    ssoIdpCLoudAuthStrategy = await module.get(SsoIdpCloudAuthStrategy);
   });
 
   describe('getAuthStrategy', () => {
@@ -72,6 +95,9 @@ describe('CloudAuthService', () => {
     });
     it('should get GitHub auth strategy', async () => {
       expect(service.getAuthStrategy(CloudAuthIdpType.GitHub)).toEqual(service['githubIdpCloudAuthStrategy']);
+    });
+    it('should get Sso auth strategy', async () => {
+      expect(service.getAuthStrategy(CloudAuthIdpType.Sso)).toEqual(service['ssoIdpCloudAuthStrategy']);
     });
     it('should throw CloudOauthUnknownAuthorizationRequestException error for unsupported strategy', async () => {
       try {
@@ -122,8 +148,23 @@ describe('CloudAuthService', () => {
         {
           strategy: CloudAuthIdpType.GitHub,
         },
-      )).rejects.toThrow(Error);
+      )).rejects.toThrow(CloudOauthMisconfigurationException);
       expect(logoutSpy).toHaveBeenCalled();
+      // previous request should stay
+      expect(service['authRequests'].size).toEqual(1);
+      expect(service['authRequests'].get(mockCloudAuthGoogleRequest.state)).toEqual(mockCloudAuthGoogleRequest);
+    });
+    it('should throw CloudOauthSsoUnsupportedEmailException when no email assign to SAML config', async () => {
+      ssoIdpCLoudAuthStrategy.generateAuthRequest.mockRejectedValueOnce(new CloudOauthSsoUnsupportedEmailException());
+      service['authRequests'].set(mockCloudAuthGoogleRequest.state, mockCloudAuthGoogleRequest);
+      expect(service['authRequests'].size).toEqual(1);
+      await expect(service.getAuthorizationUrl(
+        mockSessionMetadata,
+        {
+          strategy: CloudAuthIdpType.Sso,
+        },
+      )).rejects.toThrow(CloudOauthSsoUnsupportedEmailException);
+      expect(logoutSpy).not.toHaveBeenCalled();
       // previous request should stay
       expect(service['authRequests'].size).toEqual(1);
       expect(service['authRequests'].get(mockCloudAuthGoogleRequest.state)).toEqual(mockCloudAuthGoogleRequest);
@@ -168,6 +209,7 @@ describe('CloudAuthService', () => {
       )).toEqual({
         action: mockCloudAuthGoogleRequest.action,
         idpType: mockCloudAuthGoogleRequest.idpType,
+        sessionMetadata: mockCloudAuthGoogleRequest.sessionMetadata,
       });
       expect(service['authRequests'].size).toEqual(1);
     });
@@ -204,23 +246,121 @@ describe('CloudAuthService', () => {
           error: 'bad request',
           error_description: 'some unknown error message',
         },
-      )).rejects.toThrow(CloudOauthMisconfigurationException);
+      )).rejects.toThrow(CloudOauthUnexpectedErrorException);
     });
     it('should throw an error if error field in query parameters (CloudOauthMissedRequiredDataException)', async () => {
       expect(service['authRequests'].size).toEqual(1);
       await expect(service['callback'](
         {
           ...mockCloudAuthGoogleCallbackQueryObject,
-          error: 'bad request',
-          error_description: 'Some properties are missing: email and lastName',
+          error: 'access_denied',
+          error_description: 'Some required properties are missing: email and lastName',
         },
-      )).rejects.toThrow(new CloudOauthMissedRequiredDataException('Some properties are missing: email and lastName'));
+      )).rejects.toThrow(
+        new CloudOauthMissedRequiredDataException('Some required properties are missing: email and lastName'),
+      );
     });
     it('should throw an error if request not found', async () => {
       expect(service['authRequests'].size).toEqual(1);
       await expect(service['callback'](
         mockCloudAuthGithubCallbackQueryObject,
       )).rejects.toThrow(CloudOauthUnknownAuthorizationRequestException);
+    });
+  });
+  describe('revokeRefreshToken', () => {
+    let spy;
+
+    beforeEach(() => {
+      spy = jest.spyOn(service as any, 'exchangeCode');
+      spy.mockResolvedValue(mockTokenResponse);
+    });
+
+    it('should revoke refresh token', async () => {
+      mockedAxios.post.mockResolvedValueOnce({ data: undefined });
+      const url = new URL(mockCloudAuthGoogleRevokeTokenUrl);
+
+      expect(await service['revokeRefreshToken'](
+        mockSessionMetadata,
+      )).toEqual(undefined);
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        `${url.origin}${url.pathname}`,
+        url.searchParams,
+        {
+          headers: {
+            accept: 'application/json',
+            'cache-control': 'no-cache',
+            'content-type': 'application/x-www-form-urlencoded',
+          },
+        },
+      );
+    });
+
+    it('should not fail and should not make a http call when there is no refreshToken', async () => {
+      sessionService.getSession.mockResolvedValueOnce(null);
+
+      expect(await service['revokeRefreshToken'](
+        mockSessionMetadata,
+      )).toEqual(undefined);
+      expect(mockedAxios.post).not.toHaveBeenCalled();
+    });
+
+    it('should not fail in case of an any error', async () => {
+      sessionService.getSession.mockRejectedValueOnce(new Error());
+
+      expect(await service['revokeRefreshToken'](
+        mockSessionMetadata,
+      )).toEqual(undefined);
+      expect(mockedAxios.post).not.toHaveBeenCalled();
+    });
+  });
+  describe('renewTokens', () => {
+    let spy;
+
+    beforeEach(() => {
+      spy = jest.spyOn(service as any, 'exchangeCode');
+      spy.mockResolvedValue(mockTokenResponse);
+    });
+
+    it('should renew tokens', async () => {
+      mockedAxios.post.mockResolvedValueOnce({ data: mockTokenResponseNew });
+      const url = new URL(mockCloudAuthGoogleRenewTokenUrl);
+
+      expect(await service['renewTokens'](
+        mockSessionMetadata,
+        mockCloudApiAuthDto.idpType,
+        mockCloudApiAuthDto.refreshToken,
+      )).toEqual(undefined);
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        `${url.origin}${url.pathname}`,
+        url.searchParams,
+        {
+          headers: {
+            accept: 'application/json',
+            'cache-control': 'no-cache',
+            'content-type': 'application/x-www-form-urlencoded',
+          },
+        },
+      );
+      expect(sessionService.updateSessionData).toHaveBeenCalledWith(
+        mockSessionMetadata.sessionId,
+        {
+          accessToken: mockCloudAccessTokenNew,
+          refreshToken: mockCloudRefreshTokenNew,
+          idpType: mockCloudApiAuthDto.idpType,
+          csrf: null,
+          apiSessionId: null,
+        },
+      );
+    });
+
+    it('should throw CloudApiUnauthorizedException in case of an any error', async () => {
+      sessionService.getSession.mockRejectedValueOnce(new Error());
+
+      await expect(service['renewTokens'](
+        mockSessionMetadata,
+        mockCloudApiAuthDto.idpType,
+        mockCloudApiAuthDto.refreshToken,
+      )).rejects.toThrow(CloudApiUnauthorizedException);
     });
   });
   describe('handleCallback', () => {
@@ -240,6 +380,7 @@ describe('CloudAuthService', () => {
       )).toEqual(mockCloudAuthResponse);
       expect(callback).toHaveBeenCalledWith(mockCloudAuthResponse);
       expect(analytics.sendCloudSignInSucceeded).toHaveBeenCalledWith(
+        mockSessionMetadata,
         CloudSsoFeatureStrategy.DeepLink,
         mockCloudAuthGoogleRequest.action,
       );
@@ -272,6 +413,7 @@ describe('CloudAuthService', () => {
       )).toEqual(errorResponse);
       expect(callback).not.toHaveBeenCalled();
       expect(analytics.sendCloudSignInFailed).toHaveBeenCalledWith(
+        mockSessionMetadata,
         error,
         CloudSsoFeatureStrategy.DeepLink,
         mockCloudAuthGoogleRequest.action,

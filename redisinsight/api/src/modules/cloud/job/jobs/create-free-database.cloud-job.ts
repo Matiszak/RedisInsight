@@ -19,6 +19,9 @@ import { Database } from 'src/modules/database/models/database';
 import config from 'src/utils/config';
 import { CloudDatabaseAnalytics } from 'src/modules/cloud/database/cloud-database.analytics';
 import { CloudCapiKeyService } from 'src/modules/cloud/capi-key/cloud-capi-key.service';
+import { BulkImportService } from 'src/modules/bulk-actions/bulk-import.service';
+import { ClientContext, SessionMetadata } from 'src/common/models';
+import { DatabaseInfoService } from 'src/modules/database/database-info.service';
 
 const cloudConfig = config.get('cloud');
 
@@ -36,16 +39,18 @@ export class CreateFreeDatabaseCloudJob extends CloudJob {
       cloudTaskCapiService: CloudTaskCapiService,
       cloudDatabaseAnalytics: CloudDatabaseAnalytics,
       databaseService: DatabaseService,
+      databaseInfoService: DatabaseInfoService,
+      bulkImportService: BulkImportService,
       cloudCapiKeyService: CloudCapiKeyService,
     },
   ) {
     super(options);
   }
 
-  async iteration(): Promise<Database> {
+  async iteration(sessionMetadata: SessionMetadata): Promise<Database> {
     let freeSubscription: CloudSubscription;
     try {
-      this.logger.log('Create free database');
+      this.logger.debug('Create free database');
 
       this.checkSignal();
 
@@ -71,6 +76,7 @@ export class CreateFreeDatabaseCloudJob extends CloudJob {
       this.checkSignal();
 
       createFreeDatabaseTask = await this.runChildJob(
+        sessionMetadata,
         WaitForTaskCloudJob,
         {
           taskId: createFreeDatabaseTask.taskId,
@@ -95,6 +101,7 @@ export class CreateFreeDatabaseCloudJob extends CloudJob {
       this.checkSignal();
 
       cloudDatabase = await this.runChildJob(
+        sessionMetadata,
         WaitForActiveDatabaseCloudJob,
         {
           databaseId: cloudDatabase.databaseId,
@@ -114,32 +121,59 @@ export class CreateFreeDatabaseCloudJob extends CloudJob {
 
       const [host, port] = publicEndpoint.split(':');
 
-      const database = await this.dependencies.databaseService.create({
-        host,
-        port: parseInt(port, 10),
-        name,
-        nameFromProvider: name,
-        password,
-        provider: HostingProvider.RE_CLOUD,
-        cloudDetails: {
-          ...cloudDatabase?.cloudDetails,
-          free: true,
+      const database = await this.dependencies.databaseService.create(
+        this.options.sessionMetadata,
+        {
+          host,
+          port: parseInt(port, 10),
+          name,
+          nameFromProvider: name,
+          password,
+          provider: HostingProvider.RE_CLOUD,
+          cloudDetails: {
+            ...cloudDatabase?.cloudDetails,
+            free: true,
+          },
+          timeout: cloudConfig.cloudDatabaseConnectionTimeout,
         },
-        timeout: cloudConfig.cloudDatabaseConnectionTimeout,
-      });
+      );
 
-      this.result = { resourceId: database.id };
+      try {
+        const clientMetadata = {
+          databaseId: database.id,
+          sessionMetadata: this.options.sessionMetadata,
+          context: ClientContext.Common,
+          db: database.db,
+        };
+        const dbSize = await this.dependencies.databaseInfoService.getDBSize(clientMetadata);
+
+        if (dbSize === 0) {
+          this.dependencies.bulkImportService.importDefaultData(clientMetadata);
+        }
+      } catch (e) {
+        this.logger.error('Error when trying to feed the db with default data');
+      }
+
+      this.result = {
+        resourceId: database.id,
+        region: freeSubscription?.region,
+        provider: freeSubscription?.provider,
+      };
 
       this.changeState({ status: CloudJobStatus.Finished });
 
-      this.dependencies.cloudDatabaseAnalytics.sendCloudFreeDatabaseCreated({
-        region: freeSubscription?.region || '',
-        provider: freeSubscription?.provider || '',
-      });
+      this.dependencies.cloudDatabaseAnalytics.sendCloudFreeDatabaseCreated(
+        sessionMetadata,
+        {
+          region: freeSubscription?.region || '',
+          provider: freeSubscription?.provider || '',
+        },
+      );
 
       return database;
     } catch (e) {
       this.dependencies.cloudDatabaseAnalytics.sendCloudFreeDatabaseFailed(
+        sessionMetadata,
         e,
         {
           region: freeSubscription?.region,

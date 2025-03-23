@@ -29,8 +29,9 @@ import {
   userSettingsSelector,
 } from 'uiSrc/slices/user/user-settings'
 
+import Divider from 'uiSrc/components/divider/Divider'
 import { AdvancedSettings, WorkbenchSettings, CloudSettings } from './components'
-
+import { DateTimeFormatter } from './components/general-settings'
 import styles from './styles.module.scss'
 
 const SettingsPage = () => {
@@ -83,7 +84,7 @@ const SettingsPage = () => {
           <h4>Color Theme</h4>
         </EuiTitle>
         <EuiSpacer size="m" />
-        <EuiFormRow label="Specifies the color theme to be used in RedisInsight:">
+        <EuiFormRow label="Specifies the color theme to be used in Redis Insight:">
           <EuiSuperSelect
             options={options}
             valueOfSelected={theme}
@@ -95,6 +96,9 @@ const SettingsPage = () => {
         <EuiSpacer size="xl" />
       </EuiForm>
       <ConsentsNotifications />
+      <Divider colorVariable="separatorColor" />
+      <EuiSpacer size="l" />
+      <DateTimeFormatter />
     </>
   )
 

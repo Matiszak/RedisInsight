@@ -1,15 +1,15 @@
 import { get } from 'lodash';
-import IORedis from 'ioredis';
 import {
   BadRequestException, HttpException, Injectable, Logger,
 } from '@nestjs/common';
-import { catchAclError, convertRedisInfoReplyToObject } from 'src/utils';
+import { catchAclError } from 'src/utils';
 import { IClusterInfo } from 'src/modules/cluster-monitor/strategies/cluster.info.interface';
 import { ClusterNodesInfoStrategy } from 'src/modules/cluster-monitor/strategies/cluster-nodes.info.strategy';
 import { ClusterShardsInfoStrategy } from 'src/modules/cluster-monitor/strategies/cluster-shards.info.strategy';
 import { ClusterDetails } from 'src/modules/cluster-monitor/models';
-import { DatabaseConnectionService } from 'src/modules/database/database-connection.service';
 import { ClientMetadata } from 'src/common/models';
+import { DatabaseClientFactory } from 'src/modules/database/providers/database.client.factory';
+import { RedisClientConnectionType } from 'src/modules/redis/client';
 
 export enum ClusterInfoStrategies {
   CLUSTER_NODES = 'CLUSTER_NODES',
@@ -23,7 +23,7 @@ export class ClusterMonitorService {
   private infoStrategies: Map<string, IClusterInfo> = new Map();
 
   constructor(
-    private readonly databaseConnectionService: DatabaseConnectionService,
+    private readonly databaseClientFactory: DatabaseClientFactory,
   ) {
     this.infoStrategies.set(ClusterInfoStrategies.CLUSTER_NODES, new ClusterNodesInfoStrategy());
     this.infoStrategies.set(ClusterInfoStrategies.CLUSTER_SHARDS, new ClusterShardsInfoStrategy());
@@ -35,19 +35,19 @@ export class ClusterMonitorService {
    */
   public async getClusterDetails(clientMetadata: ClientMetadata): Promise<ClusterDetails> {
     try {
-      const client = await this.databaseConnectionService.getOrCreateClient(clientMetadata);
+      const client = await this.databaseClientFactory.getOrCreateClient(clientMetadata);
 
-      if (!(client instanceof IORedis.Cluster)) {
+      if (client.getConnectionType() !== RedisClientConnectionType.CLUSTER) {
         return Promise.reject(new BadRequestException('Current database is not in a cluster mode'));
       }
 
-      const info = convertRedisInfoReplyToObject(await client.info('server'));
+      const info = await client.getInfo('server');
 
       const strategy = this.getClusterInfoStrategy(get(info, 'server.redis_version'));
 
       return await strategy.getClusterDetails(client);
     } catch (e) {
-      this.logger.error('Unable to get cluster details', e);
+      this.logger.error('Unable to get cluster details', e, clientMetadata);
 
       if (e instanceof HttpException) {
         throw e;

@@ -77,7 +77,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
     telemetryEvent: 'shardHashes',
     title: 'Shard big hashes to small hashes',
     redisStack: true,
-    tutorial: '/quick-guides/document/introduction.md',
+    tutorialId: 'ds-hashes',
     content: [
       {
         type: 'paragraph',
@@ -121,7 +121,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
       {
         type: 'link',
         value: {
-          href: 'https://redis.com/try-free/',
+          href: 'https://redis.io/try-free/',
           name: 'Redis Cloud'
         }
       },
@@ -135,6 +135,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
   combineSmallStringsToHashes: {
     id: 'combineSmallStringsToHashes',
     title: 'Combine small strings to hashes',
+    tutorialId: 'ds-hashes',
     content: [
       {
         type: 'span',
@@ -382,7 +383,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
   bigStrings: {
     id: 'bigStrings',
     title: 'Avoid large strings',
-    tutorial: '/quick-guides/document/introduction.md',
+    tutorialId: 'ds-json-intro',
     content: [
       {
         type: 'span',
@@ -413,7 +414,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
       {
         type: 'link',
         value: {
-          href: 'https://redis.com/redis-enterprise-cloud/overview/',
+          href: 'https://redis.io/redis-enterprise-cloud/overview/',
           name: 'Redis Cloud'
         }
       },
@@ -424,7 +425,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
       {
         type: 'link',
         value: {
-          href: 'https://redis.com/redis-enterprise-software/overview/',
+          href: 'https://redis.io/redis-enterprise-software/overview/',
           name: 'Redis Enterprise Software'
         }
       },
@@ -517,7 +518,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
     id: 'bigSets',
     telemetryEvent: 'optimizeExistenceChecks',
     title: 'Consider using probabilistic data structures such as Bloom Filter or HyperLogLog',
-    tutorial: '/quick-guides/probabilistic-data-structures/introduction.md',
+    tutorialId: 'ds-prob-intro',
     redisStack: true,
     content: [
       {
@@ -527,7 +528,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
       {
         type: 'link',
         value: {
-          href: 'https://redis.io/docs/data-types/probabilistic/bloom-filter/',
+          href: 'https://redis.io/docs/latest/develop/data-types/probabilistic/bloom-filter/',
           name: 'probabilistic data structures'
         }
       },
@@ -557,7 +558,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
       {
         type: 'link',
         value: {
-          href: 'https://redis.com/redis-enterprise-cloud/overview/',
+          href: 'https://redis.io/redis-enterprise-cloud/overview/',
           name: 'Redis Cloud'
         }
       },
@@ -568,7 +569,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
       {
         type: 'link',
         value: {
-          href: 'https://redis.com/redis-enterprise-software/overview/',
+          href: 'https://redis.io/redis-enterprise-software/overview/',
           name: 'Redis Enterprise Software'
         }
       },
@@ -663,7 +664,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
     telemetryEvent: 'optimizeTimeSeries',
     title: 'Try using the Redis native time series data structure and querying capabilities',
     redisStack: true,
-    tutorial: '/quick-guides/time-series/introduction.md',
+    tutorialId: 'ds-ts-intro',
     content: [
       {
         type: 'span',
@@ -672,7 +673,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
       {
         type: 'link',
         value: {
-          href: 'https://redis.io/docs/data-types/timeseries/',
+          href: 'https://redis.io/docs/latest/develop/data-types/timeseries/',
           name: 'time series capabilities'
         }
       },
@@ -718,7 +719,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
       {
         type: 'link',
         value: {
-          href: 'https://redis.com/redis-enterprise-cloud/overview/',
+          href: 'https://redis.io/redis-enterprise-cloud/overview/',
           name: 'Redis Cloud'
         }
       },
@@ -729,7 +730,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
       {
         type: 'link',
         value: {
-          href: 'https://redis.com/redis-enterprise-software/overview/',
+          href: 'https://redis.io/redis-enterprise-software/overview/',
           name: 'Redis Enterprise Software'
         }
       },
@@ -803,12 +804,12 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
       },
       {
         type: 'span',
-        value: 'For a quick trial of the features, spin up a free developer database with '
+        value: 'For a quick trial of the features, spin up a free trial developer database with '
       },
       {
         type: 'link',
         value: {
-          href: 'https://redis.com/try-free/',
+          href: 'https://redis.io/try-free/',
           name: 'Redis Cloud'
         }
       },
@@ -830,7 +831,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
       {
         type: 'link',
         value: {
-          href: 'https://redis.io/docs/data-types/json/',
+          href: 'https://redis.io/docs/latest/develop/data-types/json/',
           name: 'JSON'
         }
       },
@@ -841,7 +842,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
       {
         type: 'link',
         value: {
-          href: 'https://redis.io/docs/data-types/probabilistic/bloom-filter/',
+          href: 'https://redis.io/docs/latest/develop/data-types/probabilistic/bloom-filter/',
           name: 'probabilistic data structures'
         }
       },
@@ -852,7 +853,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
       {
         type: 'link',
         value: {
-          href: 'https://redis.io/docs/data-types/timeseries/',
+          href: 'https://redis.io/docs/latest/develop/data-types/timeseries/',
           name: 'Time Series'
         }
       },
@@ -868,13 +869,13 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
     title: 'Optimize your query and search experience',
     deprecated: true,
     redisStack: true,
-    tutorial: '/redis_stack/working_with_json.md',
+    tutorialId: 'ds-json-intro',
     content: [
       {
         type: 'link',
         value: {
           href: 'https://redis.io/docs/interact/search-and-query/',
-          name: 'RediSearch'
+          name: 'Redis Query Engine'
         }
       },
       {
@@ -903,8 +904,8 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
       {
         type: 'link',
         value: {
-          href: 'https://redis.com/try-free/',
-          name: 'free Redis Stack database'
+          href: 'https://redis.io/try-free/',
+          name: 'free trial Redis Stack database'
         }
       },
       {
@@ -918,7 +919,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
     id: 'searchIndexes',
     title: 'Try using the indexing, querying, and full-text search, natively developed in Redis',
     redisStack: true,
-    tutorial: '/quick-guides/document/introduction.md',
+    tutorialId: 'sq-intro',
     content: [
       {
         type: 'paragraph',
@@ -996,7 +997,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
       {
         type: 'link',
         value: {
-          href: 'https://redis.com/redis-enterprise-cloud/overview/',
+          href: 'https://redis.io/redis-enterprise-cloud/overview/',
           name: 'Redis Cloud'
         }
       },
@@ -1007,7 +1008,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
       {
         type: 'link',
         value: {
-          href: 'https://redis.com/redis-enterprise-software/overview/',
+          href: 'https://redis.io/redis-enterprise-software/overview/',
           name: 'Redis Enterprise Software'
         }
       },
@@ -1041,7 +1042,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
     id: 'searchJSON',
     title: 'Try indexing your JSON documents for efficient data retrieval',
     redisStack: true,
-    tutorial: '/quick-guides/document/introduction.md',
+    tutorialId: 'sq-intro',
     content: [
       {
         type: 'span',
@@ -1088,7 +1089,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
       {
         type: 'link',
         value: {
-          href: 'https://redis.com/redis-enterprise-cloud/overview/',
+          href: 'https://redis.io/redis-enterprise-cloud/overview/',
           name: 'Redis Cloud'
         }
       },
@@ -1099,7 +1100,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
       {
         type: 'link',
         value: {
-          href: 'https://redis.com/redis-enterprise-software/overview/',
+          href: 'https://redis.io/redis-enterprise-software/overview/',
           name: 'Redis Enterprise Software'
         }
       },
@@ -1132,7 +1133,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
     id: 'stringToJson',
     title: 'Try using our JSON native document store',
     redisStack: true,
-    tutorial: '/quick-guides/document/introduction.md',
+    tutorialId: 'ds-json-intro',
     content: [
       {
         type: 'paragraph',
@@ -1163,7 +1164,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
             {
               type: 'link',
               value: {
-                href: 'https://redis.io/docs/data-types/json/path/',
+                href: 'https://redis.io/docs/latest/develop/data-types/json/path/',
                 name: 'JSONPath'
               }
             },
@@ -1217,7 +1218,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
       {
         type: 'link',
         value: {
-          href: 'https://redis.com/redis-enterprise-cloud/overview/',
+          href: 'https://redis.io/redis-enterprise-cloud/overview/',
           name: 'Redis Cloud'
         }
       },
@@ -1228,7 +1229,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
       {
         type: 'link',
         value: {
-          href: 'https://redis.com/redis-enterprise-software/overview/',
+          href: 'https://redis.io/redis-enterprise-software/overview/',
           name: 'Redis Enterprise Software'
         }
       },
@@ -1249,11 +1250,11 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
   searchVisualization: {
     id: 'searchVisualization',
     title: 'Try Workbench, the advanced command-line interface',
-    tutorial: '',
+    tutorialId: '',
     content: [
       {
         type: 'paragraph',
-        value: 'Try RedisInsight Workbench, our advanced command-line interface with syntax highlighting, intelligent auto-complete, and the ability to work with commands in an editor mode.'
+        value: 'Try Redis Insight Workbench, our advanced command-line interface with syntax highlighting, intelligent auto-complete, and the ability to work with commands in an editor mode.'
       },
       {
         type: 'spacer',
@@ -1277,7 +1278,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
       {
         type: 'link',
         value: {
-          href: 'https://redis.io/docs/data-types/json/',
+          href: 'https://redis.io/docs/latest/develop/data-types/json/',
           name: 'JSON'
         }
       },
@@ -1299,7 +1300,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
       {
         type: 'link',
         value: {
-          href: 'https://redis.io/docs/data-types/timeseries/',
+          href: 'https://redis.io/docs/latest/develop/data-types/timeseries/',
           name: 'Time Series'
         }
       },
@@ -1312,7 +1313,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
   searchHash: {
     id: 'searchHash',
     title: 'Try indexing your hash documents to query and retrieve data',
-    tutorial: '/quick-guides/document/introduction.md',
+    tutorialId: 'sq-intro',
     redisStack: true,
     content: [
       {
@@ -1398,7 +1399,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
       {
         type: 'link',
         value: {
-          href: 'https://redis.com/redis-enterprise-cloud/overview/',
+          href: 'https://redis.io/redis-enterprise-cloud/overview/',
           name: 'Redis Cloud'
         }
       },
@@ -1409,7 +1410,7 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
       {
         type: 'link',
         value: {
-          href: 'https://redis.com/redis-enterprise-software/overview/',
+          href: 'https://redis.io/redis-enterprise-software/overview/',
           name: 'Redis Enterprise Software'
         }
       },
@@ -1439,219 +1440,4 @@ export const MOCK_RECOMMENDATIONS: IRecommendationsStatic = {
     ],
     badges: ['code_changes', 'configuration_changes']
   },
-  luaToFunctions: {
-    id: 'luaToFunctions',
-    title: 'Consider using triggers and functions',
-    tutorial: '/quick-guides/triggers-and-functions/introduction.md',
-    content: [
-      {
-        type: 'paragraph',
-        value: "If you are using LUA scripts to run application logic inside Redis, consider using triggers and functions to take advantage of Javascript's vast ecosystem of libraries and frameworks and modern, expressive syntax."
-      },
-      {
-        type: 'spacer',
-        value: 'l'
-      },
-      {
-        type: 'paragraph',
-        value: 'Triggers and functions can execute business logic on changes within a database, and read across all shards in clustered databases.'
-      },
-      {
-        type: 'spacer',
-        value: 'l'
-      },
-      {
-        type: 'span',
-        value: 'These capabilities are part of '
-      },
-      {
-        type: 'link',
-        value: {
-          href: 'https://redis.io/docs/about/about-stack/',
-          name: 'Redis Stack'
-        }
-      },
-      {
-        type: 'span',
-        value: ', '
-      },
-      {
-        type: 'link',
-        value: {
-          href: 'https://redis.com/redis-enterprise-cloud/overview/',
-          name: 'Redis Cloud'
-        }
-      },
-      {
-        type: 'span',
-        value: ' and '
-      },
-      {
-        type: 'link',
-        value: {
-          href: 'https://redis.com/redis-enterprise-software/overview/',
-          name: 'Redis Enterprise Software'
-        }
-      },
-      {
-        type: 'span',
-        value: '.'
-      }
-    ],
-    badges: ['code_changes']
-  },
-  functionsWithStreams: {
-    id: 'functionsWithStreams',
-    title: 'Consider using triggers and functions to react in real-time to stream entries',
-    tutorial: '/quick-guides/triggers-and-functions/introduction.md',
-    content: [
-      {
-        type: 'paragraph',
-        value: 'If you need to manipulate your data based on Redis stream entries, consider using stream triggers that are a part of triggers and functions. It can help lower latency by moving business logic closer to the data.'
-      },
-      {
-        type: 'spacer',
-        value: 'l'
-      },
-      {
-        type: 'paragraph',
-        value: "Try triggers and functions to take advantage of Javascript's vast ecosystem of libraries and frameworks and modern, expressive syntax."
-      },
-      {
-        type: 'spacer',
-        value: 'l'
-      },
-      {
-        type: 'paragraph',
-        value: 'These capabilities can execute business logic on changes within a database, and read across all shards in clustered databases.'
-      },
-      {
-        type: 'spacer',
-        value: 'l'
-      },
-      {
-        type: 'span',
-        value: 'Triggers and functions are part of '
-      },
-      {
-        type: 'link',
-        value: {
-          href: 'https://redis.io/docs/about/about-stack/',
-          name: 'Redis Stack'
-        }
-      },
-      {
-        type: 'span',
-        value: ', '
-      },
-      {
-        type: 'link',
-        value: {
-          href: 'https://redis.com/redis-enterprise-cloud/overview/',
-          name: 'Redis Cloud'
-        }
-      },
-      {
-        type: 'span',
-        value: ' and '
-      },
-      {
-        type: 'link',
-        value: {
-          href: 'https://redis.com/redis-enterprise-software/overview/',
-          name: 'Redis Enterprise Software'
-        }
-      },
-      {
-        type: 'span',
-        value: '.'
-      },
-      {
-        type: 'spacer',
-        value: 'l'
-      },
-      {
-        type: 'paragraph',
-        value: 'Try the interactive tutorial to learn more about triggers and functions.'
-      }
-    ],
-    badges: ['code_changes']
-  },
-  functionsWithKeyspace: {
-    id: 'functionsWithKeyspace',
-    title: 'Consider using triggers and functions to react in real-time to database changes',
-    tutorial: '/quick-guides/triggers-and-functions/introduction.md',
-    content: [
-      {
-        type: 'paragraph',
-        value: 'If you need to manipulate your data based on keyspace notifications, consider using keyspace triggers that are a part of triggers and functions. It can help lower latency by moving business logic closer to the data.'
-      },
-      {
-        type: 'spacer',
-        value: 'l'
-      },
-      {
-        type: 'paragraph',
-        value: "Try triggers and functions to take advantage of Javascript's vast ecosystem of libraries and frameworks and modern, expressive syntax."
-      },
-      {
-        type: 'spacer',
-        value: 'l'
-      },
-      {
-        type: 'paragraph',
-        value: 'These capabilities can execute business logic on changes within a database, and read across all shards in clustered databases.'
-      },
-      {
-        type: 'spacer',
-        value: 'l'
-      },
-      {
-        type: 'span',
-        value: 'Triggers and functions are part of '
-      },
-      {
-        type: 'link',
-        value: {
-          href: 'https://redis.io/docs/about/about-stack/',
-          name: 'Redis Stack'
-        }
-      },
-      {
-        type: 'span',
-        value: ', '
-      },
-      {
-        type: 'link',
-        value: {
-          href: 'https://redis.com/redis-enterprise-cloud/overview/',
-          name: 'Redis Cloud'
-        }
-      },
-      {
-        type: 'span',
-        value: ' and '
-      },
-      {
-        type: 'link',
-        value: {
-          href: 'https://redis.com/redis-enterprise-software/overview/',
-          name: 'Redis Enterprise Software'
-        }
-      },
-      {
-        type: 'span',
-        value: '.'
-      },
-      {
-        type: 'spacer',
-        value: 'l'
-      },
-      {
-        type: 'paragraph',
-        value: 'Try the interactive tutorial to learn more about triggers and functions.'
-      }
-    ],
-    badges: ['code_changes']
-  }
 }

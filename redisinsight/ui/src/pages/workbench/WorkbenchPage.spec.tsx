@@ -61,8 +61,6 @@ describe('WorkbenchPage', () => {
             databaseId: '18c37d1d-bc25-4e46-a20d-a1f9bf228946',
             command: 'info',
             summary: null,
-            role: null,
-            nodeOptions: null,
             createdAt: '2022-09-28T18:04:46.000Z',
             emptyCommand: false
           }],
@@ -109,8 +107,6 @@ describe('Telemetry', () => {
             databaseId: '18c37d1d-bc25-4e46-a20d-a1f9bf228946',
             command: 'info',
             summary: null,
-            role: null,
-            nodeOptions: null,
             createdAt: '2022-09-28T18:04:46.000Z',
             emptyCommand: false
           }],
@@ -120,9 +116,8 @@ describe('Telemetry', () => {
   })
 
   it('should send proper eventData after changing Raw mode', async () => {
-    const sendEventTelemetryMock = jest.fn()
-
-    sendEventTelemetry.mockImplementation(() => sendEventTelemetryMock)
+    const sendEventTelemetryMock = jest.fn();
+    (sendEventTelemetry as jest.Mock).mockImplementation(() => sendEventTelemetryMock)
 
     render(<WorkbenchPage />)
 
@@ -136,28 +131,13 @@ describe('Telemetry', () => {
         changedFromMode: RunQueryMode.ASCII,
         changedToMode: RunQueryMode.Raw,
       }
-    })
-    sendEventTelemetry.mockRestore()
-
-    // turn off Raw mode
-    fireEvent.click(screen.getByTestId('btn-change-mode'))
-
-    expect(sendEventTelemetry).toBeCalledWith({
-      event: TelemetryEvent.WORKBENCH_MODE_CHANGED,
-      eventData: {
-        databaseId: INSTANCE_ID_MOCK,
-        changedFromMode: RunQueryMode.Raw,
-        changedToMode: RunQueryMode.ASCII,
-      }
-    })
-
-    sendEventTelemetry.mockRestore()
+    });
+    (sendEventTelemetry as jest.Mock).mockRestore()
   })
 
   it('should send proper eventData without Raw mode', async () => {
-    const sendEventTelemetryMock = jest.fn()
-
-    sendEventTelemetry.mockImplementation(() => sendEventTelemetryMock)
+    const sendEventTelemetryMock = jest.fn();
+    (sendEventTelemetry as jest.Mock).mockImplementation(() => sendEventTelemetryMock)
 
     render(<WorkbenchPage />)
 
@@ -167,38 +147,22 @@ describe('Telemetry', () => {
     expect(sendEventTelemetry).toBeCalledWith({
       event: TelemetryEvent.WORKBENCH_COMMAND_SUBMITTED,
       eventData: {
-        command: 'info;'.toUpperCase(),
+        command: 'INFO',
         databaseId: INSTANCE_ID_MOCK,
         results: 'single',
-        auto: false,
         multiple: 'Single',
         pipeline: true,
         rawMode: false,
       }
-    })
-
-    sendEventTelemetry.mockRestore()
+    });
+    (sendEventTelemetry as jest.Mock).mockRestore()
   })
 
   it('should send proper eventData with Raw mode', async () => {
-    const sendEventTelemetryMock = jest.fn()
-
-    sendEventTelemetry.mockImplementation(() => sendEventTelemetryMock)
+    const sendEventTelemetryMock = jest.fn();
+    (sendEventTelemetry as jest.Mock).mockImplementation(() => sendEventTelemetryMock)
 
     render(<WorkbenchPage />)
-
-    // turn on Raw mode
-    fireEvent.click(screen.getByTestId('btn-change-mode'))
-
-    expect(sendEventTelemetry).toBeCalledWith({
-      event: TelemetryEvent.WORKBENCH_MODE_CHANGED,
-      eventData: {
-        databaseId: INSTANCE_ID_MOCK,
-        changedFromMode: RunQueryMode.ASCII,
-        changedToMode: RunQueryMode.Raw,
-      }
-    })
-    sendEventTelemetry.mockRestore()
 
     // send command with Raw mode
     fireEvent.click(screen.getByTestId('btn-submit'))
@@ -206,23 +170,20 @@ describe('Telemetry', () => {
     expect(sendEventTelemetry).toBeCalledWith({
       event: TelemetryEvent.WORKBENCH_COMMAND_SUBMITTED,
       eventData: {
-        command: 'info;'.toUpperCase(),
+        command: 'INFO',
         databaseId: INSTANCE_ID_MOCK,
         results: 'single',
-        auto: false,
         multiple: 'Single',
         pipeline: true,
-        rawMode: true,
+        rawMode: false,
       }
-    })
-
-    sendEventTelemetry.mockRestore()
+    });
+    (sendEventTelemetry as jest.Mock).mockRestore()
   })
 
   it('Results: Raw mode', async () => {
-    const sendEventTelemetryMock = jest.fn()
-
-    sendEventTelemetry.mockImplementation(() => sendEventTelemetryMock)
+    const sendEventTelemetryMock = jest.fn();
+    (sendEventTelemetry as jest.Mock).mockImplementation(() => sendEventTelemetryMock)
 
     render(<WorkbenchPage />)
 
@@ -233,21 +194,19 @@ describe('Telemetry', () => {
       eventData: {
         auto: undefined,
         pipeline: undefined,
-        command: 'INFO;',
+        command: 'INFO',
         databaseId: INSTANCE_ID_MOCK,
         multiple: 'Single',
         results: 'single',
         rawMode: true,
       }
-    })
-
-    sendEventTelemetry.mockRestore()
+    });
+    (sendEventTelemetry as jest.Mock).mockRestore()
   })
 
   it('should call proper telemetry on delete', async () => {
-    const sendEventTelemetryMock = jest.fn()
-
-    sendEventTelemetry.mockImplementation(() => sendEventTelemetryMock)
+    const sendEventTelemetryMock = jest.fn();
+    (sendEventTelemetry as jest.Mock).mockImplementation(() => sendEventTelemetryMock)
 
     render(<WorkbenchPage />)
 
@@ -259,9 +218,8 @@ describe('Telemetry', () => {
         databaseId: 'instanceId',
         command: 'info'
       }
-    })
-
-    sendEventTelemetry.mockRestore()
+    });
+    (sendEventTelemetry as jest.Mock).mockRestore()
 
     fireEvent.click(screen.getByTestId('clear-history-btn'))
 
@@ -270,9 +228,8 @@ describe('Telemetry', () => {
       eventData: {
         databaseId: 'instanceId'
       }
-    })
-
-    sendEventTelemetry.mockRestore()
+    });
+    (sendEventTelemetry as jest.Mock).mockRestore()
   })
 })
 describe('Raw mode', () => {
@@ -292,8 +249,6 @@ describe('Raw mode', () => {
             databaseId: '18c37d1d-bc25-4e46-a20d-a1f9bf228946',
             command: 'info',
             summary: null,
-            role: null,
-            nodeOptions: null,
             createdAt: '2022-09-28T18:04:46.000Z',
             emptyCommand: false
           }],

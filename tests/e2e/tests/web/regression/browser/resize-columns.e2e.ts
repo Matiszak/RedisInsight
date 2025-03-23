@@ -7,7 +7,6 @@ import { rte } from '../../../../helpers/constants';
 import { commonUrl, ossStandaloneConfig } from '../../../../helpers/conf';
 import { DatabaseAPIRequests } from '../../../../helpers/api/api-database';
 import { Common } from '../../../../helpers/common';
-import { t } from 'testcafe';
 
 const myRedisDatabasePage = new MyRedisDatabasePage();
 const browserPage = new BrowserPage();
@@ -55,7 +54,7 @@ fixture `Resize columns in Key details`
         await databaseHelper.acceptLicenseTermsAndAddDatabaseApi(databasesForAdding[0]);
         await databaseAPIRequests.addNewStandaloneDatabaseApi(databasesForAdding[1]);
         await browserPage.addHashKey(keys[0].name, '2147476121', longFieldName, longFieldName);
-        await browserPage.addListKey(keys[1].name, '2147476121', 'element');
+        await browserPage.addListKey(keys[1].name, '2147476121', ['element']);
         await browserPage.addZSetKey(keys[2].name, '1', '2147476121', 'member');
     })
     .afterEach(async() => {
@@ -81,8 +80,8 @@ test('Resize of columns in Hash, List, Zset Key details', async t => {
     }
 
     // Verify that resize saved when switching between pages
-    await t.click(myRedisDatabasePage.NavigationPanel.workbenchButton);
-    await t.click(myRedisDatabasePage.NavigationPanel.browserButton);
+    await t.click(browserPage.NavigationPanel.workbenchButton);
+    await t.click(browserPage.NavigationPanel.browserButton);
     await browserPage.openKeyDetails(keys[0].name);
     await t.expect(field.clientWidth).within(keys[0].fieldWidthEnd - 5, keys[0].fieldWidthEnd + 5, 'Resize context not saved for key when switching between pages');
 

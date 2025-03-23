@@ -43,28 +43,34 @@ if test -f "$PRESTART"; then
 fi
 
 echo "Pulling RTE... ${RTE}"
-eval "ID=$ID RTE=$RTE docker-compose \
+eval "ID=$ID RTE=$RTE docker compose \
   -f $BASEDIR/$BUILD.build.yml \
   -f $BASEDIR/$RTE/docker-compose.yml \
   --env-file $BASEDIR/$BUILD.build.env pull redis"
 
 echo "Building RTE... ${RTE}"
-eval "ID=$ID RTE=$RTE docker-compose \
+eval "ID=$ID RTE=$RTE docker compose \
   -f $BASEDIR/$BUILD.build.yml \
   -f $BASEDIR/$RTE/docker-compose.yml \
   --env-file $BASEDIR/$BUILD.build.env build --no-cache redis"
 
 echo "Test run is starting... ${RTE}"
-eval "ID=$ID RTE=$RTE docker-compose -p $ID \
+eval "ID=$ID RTE=$RTE docker compose -p $ID \
   -f $BASEDIR/$BUILD.build.yml \
   -f $BASEDIR/$RTE/docker-compose.yml \
-  --env-file $BASEDIR/$BUILD.build.env run --use-aliases test"
+  --env-file $BASEDIR/$BUILD.build.env run --build --use-aliases test"
 
 echo "Stop all containers... ${RTE}"
-eval "ID=$ID RTE=$RTE docker-compose -p $ID \
+eval "ID=$ID RTE=$RTE docker compose -p $ID \
   -f $BASEDIR/$BUILD.build.yml \
   -f $BASEDIR/$RTE/docker-compose.yml \
   --env-file $BASEDIR/$BUILD.build.env stop"
+
+echo "Remove containers with anonymous volumes... ${RTE}"
+eval "ID=$ID RTE=$RTE docker compose -p $ID \
+  -f $BASEDIR/$BUILD.build.yml \
+  -f $BASEDIR/$RTE/docker-compose.yml \
+  --env-file $BASEDIR/$BUILD.build.env rm -v -f"
 
 echo "Removing test run docker network..."
 eval "docker network rm $ID || true"

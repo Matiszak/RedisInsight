@@ -1,6 +1,28 @@
 import { Joi } from '../../helpers/test';
 import { caCertSchema, clientCertSchema } from '../certificate/constants';
 
+const providers = [
+  'RE_CLUSTER',
+  'RE_CLOUD',
+  'REDIS_STACK',
+  'REDIS_ENTERPRISE',
+  'AZURE_CACHE',
+  'AZURE_CACHE_REDIS_ENTERPRISE',
+  'REDIS_COMMUNITY_EDITION',
+  'AWS_ELASTICACHE',
+  'AWS_MEMORYDB',
+  'VALKEY',
+  'MEMORYSTORE',
+  'DRAGONFLY',
+  'KEYDB',
+  'GARNET',
+  'KVROCKS',
+  'REDICT',
+  'UPSTASH',
+  'UNKNOWN_LOCALHOST',
+  'UNKNOWN',
+];
+
 export const databaseSchema = Joi.object().keys({
   id: Joi.string().required(),
   name: Joi.string().required(),
@@ -10,21 +32,23 @@ export const databaseSchema = Joi.object().keys({
   connectionType: Joi.string().valid('STANDALONE', 'CLUSTER', 'SENTINEL').required(),
   username: Joi.string().allow(null),
   password: Joi.boolean().allow(null),
-  timeout: Joi.number().integer().required(),
+  timeout: Joi.number().integer().allow(null),
   compressor: Joi.string().valid('NONE', 'LZ4', 'GZIP', 'ZSTD', 'SNAPPY').required(),
   nameFromProvider: Joi.string().allow(null),
   lastConnection: Joi.string().isoDate().allow(null),
-  provider: Joi.string().valid('LOCALHOST', 'UNKNOWN', 'RE_CLOUD', 'RE_CLUSTER'),
+  createdAt: Joi.string().isoDate(),
+  provider: Joi.string().valid(...providers),
   new: Joi.boolean().allow(null),
   tls: Joi.boolean().allow(null),
   tlsServername: Joi.string().allow(null),
   verifyServerCert: Joi.boolean().allow(null),
   caCert: caCertSchema.strict(true).allow(null),
   clientCert: clientCertSchema.strict(true).allow(null),
+  keyNameFormat: Joi.string().valid('Unicode', 'HEX').allow(null),
   sentinelMaster: Joi.object({
     name: Joi.string().required(),
     username: Joi.string().allow(null),
-    password: Joi.string().allow(null),
+    password: Joi.boolean().allow(null),
   }).allow(null),
   nodes: Joi.array().items({
     host: Joi.string().required(),
@@ -36,6 +60,7 @@ export const databaseSchema = Joi.object().keys({
     semanticVersion: Joi.string(),
   }).allow(null),
   ssh: Joi.boolean().allow(null),
+  forceStandalone: Joi.boolean().allow(null),
   sshOptions: Joi.object({
     id: Joi.string().allow(null),
     host: Joi.string().required(),

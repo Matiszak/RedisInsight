@@ -13,7 +13,7 @@ import {
   SearchZSetMembersResponse,
   ZSetMemberDto,
   GetZSetResponse,
-} from 'apiSrc/modules/browser/dto'
+} from 'apiSrc/modules/browser/z-set/dto'
 import {
   deleteKeyFromList,
   deleteSelectedKeySuccess,
@@ -55,7 +55,7 @@ const zsetSlice = createSlice({
       state.data.members = payload
     },
     // load ZSet members
-    loadZSetMembers: (state, { payload: [sortOrder, resetData = true] }:PayloadAction<[SortOrder, Maybe<boolean>]>) => {
+    loadZSetMembers: (state, { payload: [sortOrder, resetData = true] }: PayloadAction<[SortOrder, Maybe<boolean>]>) => {
       state.loading = true
       state.searching = false
       state.error = ''

@@ -24,10 +24,6 @@ const responseSchema = Joi.array().items(Joi.object().keys({
     version: Joi.number().integer().required(),
     semanticVersion: Joi.string(),
   })).min(0).required(),
-  nodes: Joi.array().items(Joi.object().keys({
-    host: Joi.string().required(),
-    port: Joi.number().integer().required(),
-  })).min(0).required(),
   verifyServerCert: Joi.boolean().allow(null),
   sentinelMaster: Joi.object({
     name: Joi.string().required(),
@@ -35,6 +31,7 @@ const responseSchema = Joi.array().items(Joi.object().keys({
     password: Joi.string(),
   }).allow(null),
   ssh: Joi.boolean().allow(null),
+  forceStandalone: Joi.boolean().allow(null),
   sshOptions: Joi.object({
     id: Joi.string(),
     host: Joi.string().required(),
@@ -48,14 +45,17 @@ const responseSchema = Joi.array().items(Joi.object().keys({
     id: Joi.string().required(),
     name: Joi.string().required(),
     certificate: Joi.string().required(),
+    isPreSetup: Joi.boolean().allow(null),
   }).allow(null),
   clientCert: Joi.object({
     id: Joi.string().required(),
     name: Joi.string().required(),
     certificate: Joi.string().required(),
     key: Joi.string(),
+    isPreSetup: Joi.boolean().allow(null),
   }).allow(null),
   compressor: Joi.string().valid('NONE', 'GZIP', 'ZSTD', 'LZ4', 'SNAPPY', 'Brotli', 'PHPGZCompress').required(),
+  isPreSetup: Joi.boolean().allow(null),
 })).required().strict(true);
 
 const mainCheckFn = getMainCheckFn(endpoint);

@@ -39,6 +39,8 @@ export enum TelemetryEvents {
   // Event for cloud CAPI keys
   CloudAccountKeyGenerated = 'CLOUD_ACCOUNT_KEY_GENERATED',
   CloudAccountKeyGenerationFailed = 'CLOUD_ACCOUNT_KEY_GENERATION_FAILED',
+  CloudAccountSecretGenerated = 'CLOUD_ACCOUNT_SECRET_GENERATED',
+  CloudAccountSecretGenerationFailed = 'CLOUD_ACCOUNT_SECRET_GENERATION_FAILED',
 
   // Events for cli tool
   CliClientCreated = 'CLI_CLIENT_CREATED',
@@ -47,11 +49,13 @@ export enum TelemetryEvents {
   CliClientDeleted = 'CLI_CLIENT_DELETED',
   CliClientRecreated = 'CLI_CLIENT_RECREATED',
   CliCommandExecuted = 'CLI_COMMAND_EXECUTED',
+  CliIndexInfoSubmitted = 'CLI_INDEX_INFO_SUBMITTED',
   CliClusterNodeCommandExecuted = 'CLI_CLUSTER_COMMAND_EXECUTED',
   CliCommandErrorReceived = 'CLI_COMMAND_ERROR_RECEIVED',
 
   // Events for workbench tool
   WorkbenchCommandExecuted = 'WORKBENCH_COMMAND_EXECUTED',
+  WorkbenchIndexInfoSubmitted = 'WORKBENCH_INDEX_INFO_SUBMITTED',
   WorkbenchCommandErrorReceived = 'WORKBENCH_COMMAND_ERROR_RECEIVED',
   WorkbenchCommandDeleted = 'WORKBENCH_COMMAND_DELETE_COMMAND',
   // Custom tutorials
@@ -76,6 +80,7 @@ export enum TelemetryEvents {
   BulkActionsStopped = 'BULK_ACTIONS_STOPPED',
   BulkActionsSucceed = 'BULK_ACTIONS_SUCCEED',
   BulkActionsFailed = 'BULK_ACTIONS_FAILED',
+  ImportSamplesUploaded = 'IMPORT_SAMPLES_UPLOADED',
 
   // Feature
   FeatureFlagConfigUpdated = 'FEATURE_FLAG_CONFIG_UPDATED',
@@ -84,7 +89,14 @@ export enum TelemetryEvents {
   FeatureFlagRecalculated = 'FEATURE_FLAG_RECALCULATED',
 
   // Insights
-  InsightsRecommendationGenerated = 'INSIGHTS_RECOMMENDATION_GENERATED',
+  InsightsTipGenerated = 'INSIGHTS_TIP_GENERATED',
+
+  // RDI
+  RdiInstanceDeleted = 'RDI_INSTANCE_DELETED',
+  RdiPipelineDeploymentSucceeded = 'RDI_PIPELINE_DEPLOYMENT_SUCCEEDED',
+  RdiPipelineDeploymentFailed = 'RDI_PIPELINE_DEPLOYMENT_FAILED',
+  RdiPipelineUploaded = 'RDI_PIPELINE_UPLOAD_SUCCEEDED',
+  RdiPipelineUploadFailed = 'RDI_PIPELINE_UPLOAD_FAILED',
 }
 
 export enum CommandType {

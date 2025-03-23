@@ -13,6 +13,8 @@ export enum CustomErrorCodes {
   CloudOauthUnknownAuthorizationRequest = 11_007,
   CloudOauthUnexpectedError = 11_008,
   CloudOauthMissedRequiredData = 11_009,
+  CloudOauthCanceled = 11_010,
+  CloudOauthSsoUnsupportedEmail = 11_011,
   CloudCapiUnauthorized = 11_021,
   CloudCapiKeyUnauthorized = 11_022,
   CloudCapiKeyNotFound = 11_023,
@@ -36,4 +38,31 @@ export enum CustomErrorCodes {
 
   // General database errors [11200, 11299]
   DatabaseAlreadyExists = 11_200,
+
+  // AI errors [11300, 11399]
+  ConvAiInternalServerError = 11_300,
+  ConvAiUnauthorized = 11_301,
+  ConvAiForbidden = 11_302,
+  ConvAiBadRequest = 11_303,
+  ConvAiNotFound = 11_304,
+
+  QueryAiInternalServerError = 11_351,
+  QueryAiUnauthorized = 11_351,
+  QueryAiForbidden = 11_352,
+  QueryAiBadRequest = 11_353,
+  QueryAiNotFound = 11_354,
+  QueryAiRateLimitRequest = 11_360,
+  QueryAiRateLimitToken = 11_361,
+  QueryAiRateLimitMaxTokens = 11_362,
+
+  // RDI errors [11400, 11599]
+  RdiDeployPipelineFailure = 11_401,
+  RdiUnauthorized = 11_402,
+  RdiInternalServerError = 11_403,
+  RdiValidationError = 11_404,
+  RdiNotFound = 11_405,
+  RdiForbidden = 11_406,
+  RdiResetPipelineFailure = 11_407,
+  RdiStartPipelineFailure = 11_408,
+  RdiStopPipelineFailure = 11_409,
 }

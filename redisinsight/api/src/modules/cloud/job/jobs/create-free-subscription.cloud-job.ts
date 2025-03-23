@@ -17,6 +17,7 @@ import {
   CloudSubscriptionUnableToDetermineException,
   CloudTaskNoResourceIdException,
 } from 'src/modules/cloud/job/exceptions';
+import { SessionMetadata } from 'src/common/models';
 import {
   CloudSubscriptionAlreadyExistsFreeException,
 } from '../exceptions/cloud-subscription-already-exists-free.exception';
@@ -38,8 +39,8 @@ export class CreateFreeSubscriptionCloudJob extends CloudJob {
     super(options);
   }
 
-  async iteration(): Promise<CloudSubscription> {
-    this.logger.log('Ensure free cloud subscription');
+  async iteration(sessionMetadata: SessionMetadata): Promise<CloudSubscription> {
+    this.logger.debug('Ensure free cloud subscription');
 
     this.checkSignal();
 
@@ -70,6 +71,8 @@ export class CreateFreeSubscriptionCloudJob extends CloudJob {
         throw new CloudDatabaseAlreadyExistsFreeException(undefined, {
           subscriptionId: freeSubscription.id,
           databaseId: databases[0].databaseId,
+          region: freeSubscription?.region,
+          provider: freeSubscription?.provider,
         });
       }
 
@@ -110,6 +113,7 @@ export class CreateFreeSubscriptionCloudJob extends CloudJob {
       this.checkSignal();
 
       createSubscriptionTask = await this.runChildJob(
+        sessionMetadata,
         WaitForTaskCloudJob,
         {
           taskId: createSubscriptionTask.taskId,
@@ -136,6 +140,7 @@ export class CreateFreeSubscriptionCloudJob extends CloudJob {
 
     if (freeSubscription.status !== CloudSubscriptionStatus.Active) {
       freeSubscription = await this.runChildJob(
+        sessionMetadata,
         WaitForActiveSubscriptionCloudJob,
         {
           subscriptionId: freeSubscription.id,

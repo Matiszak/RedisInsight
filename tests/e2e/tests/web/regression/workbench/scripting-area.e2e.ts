@@ -1,7 +1,6 @@
-import { Selector } from 'testcafe';
-import { rte } from '../../../../helpers/constants';
+import { ExploreTabs, rte } from '../../../../helpers/constants';
 import { DatabaseHelper } from '../../../../helpers/database';
-import { MyRedisDatabasePage, WorkbenchPage, SettingsPage } from '../../../../pageObjects';
+import { MyRedisDatabasePage, WorkbenchPage, SettingsPage, BrowserPage } from '../../../../pageObjects';
 import { commonUrl, ossStandaloneConfig } from '../../../../helpers/conf';
 import { DatabaseAPIRequests } from '../../../../helpers/api/api-database';
 import { Common } from '../../../../helpers/common';
@@ -11,6 +10,7 @@ const workbenchPage = new WorkbenchPage();
 const settingsPage = new SettingsPage();
 const databaseHelper = new DatabaseHelper();
 const databaseAPIRequests = new DatabaseAPIRequests();
+const browserPage = new BrowserPage();
 
 const indexName = Common.generateWord(5);
 let keyName = Common.generateWord(5);
@@ -21,7 +21,7 @@ fixture `Scripting area at Workbench`
     .beforeEach(async t => {
         await databaseHelper.acceptLicenseTermsAndAddDatabaseApi(ossStandaloneConfig);
         // Go to Workbench page
-        await t.click(myRedisDatabasePage.NavigationPanel.workbenchButton);
+        await t.click(browserPage.NavigationPanel.workbenchButton);
     })
     .afterEach(async() => {
         // Clear and delete database
@@ -42,7 +42,7 @@ test('Verify that user can run multiple commands written in multiple lines in Wo
     await t.click(settingsPage.accordionWorkbenchSettings);
     await settingsPage.changeCommandsInPipeline('1');
     // Go to Workbench page
-    await t.click(myRedisDatabasePage.NavigationPanel.workbenchButton);
+    await t.click(browserPage.NavigationPanel.workbenchButton);
     // Send commands in multiple lines
     await workbenchPage.sendCommandInWorkbench(commandsForSend.join('\n'), 0.5);
     // Check the result
@@ -69,7 +69,7 @@ test
         await t.click(settingsPage.accordionWorkbenchSettings);
         await settingsPage.changeCommandsInPipeline('1');
         // Go to Workbench page
-        await t.click(myRedisDatabasePage.NavigationPanel.workbenchButton);
+        await t.click(settingsPage.NavigationPanel.workbenchButton);
         // Send commands in multiple lines with double slashes (//) wrapped in double quotes
         await workbenchPage.sendCommandInWorkbench(commandsForSend.join('\n"//"'), 0.5);
         // Check that all commands are executed
@@ -84,17 +84,20 @@ test
         await databaseAPIRequests.deleteStandaloneDatabaseApi(ossStandaloneConfig);
     })('Verify that user can see an indication (green triangle) of commands from the left side of the line numbers', async t => {
         // Open Working with Hashes page
-        await t.click(workbenchPage.documentButtonInQuickGuides);
-        await t.expect(workbenchPage.internalLinkWorkingWithHashes.visible).ok('The working with hachs link is not visible', { timeout: 5000 });
-        await t.click(workbenchPage.internalLinkWorkingWithHashes);
+        await workbenchPage.NavigationHeader.togglePanel(true);
+        const tutorials = await workbenchPage.InsightsPanel.setActiveTab(ExploreTabs.Tutorials);
+        await t.click(tutorials.dataStructureAccordionTutorialButton);
+        await t.expect(tutorials.internalLinkWorkingWithHashes.visible).ok('The working with hashes link is not visible', { timeout: 5000 });
+        await t.click(tutorials.internalLinkWorkingWithHashes);
         // Put Create Hash commands into Editing area
-        await t.click(workbenchPage.preselectHashCreate);
-        // Maximize Scripting area to see all the commands
-        await t.drag(workbenchPage.resizeButtonForScriptingAndResults, 0, 300, { speed: 0.4 });
+        const codeText  = await tutorials.getBlockCode('Create a hash');
+        const regex = new RegExp('HSET', 'g');
+        const monacoCommandIndicatorCount = codeText.match(regex)!.length;
+        await tutorials.runBlockCode('Create a hash');
         //Get number of commands in scripting area
-        const numberOfCommands = Selector('span').withExactText('HSET').count;
+        const numberOfCommands = await workbenchPage.executedCommandTitle.withText('HSET').count;
         //Compare number of indicator displayed and expected value
-        await t.expect(workbenchPage.monacoCommandIndicator.count).eql(await numberOfCommands, 'Number of command indicator is incorrect');
+        await t.expect(monacoCommandIndicatorCount).eql(numberOfCommands, 'Number of command indicator is incorrect');
     });
 test
     .after(async() => {
@@ -110,11 +113,11 @@ test
         // Right click to get context menu
         await t.rightClick(workbenchPage.queryInput);
         // Select Command Palette option
-        await t.click(workbenchPage.monacoContextMenu.find(workbenchPage.cssMonacoCommandPaletteLine));
+        await t.click(workbenchPage.MonacoEditor.monacoContextMenu.find(workbenchPage.cssMonacoCommandPaletteLine));
         // Print "Run Commands" shortcut
-        await t.typeText(workbenchPage.monacoShortcutInput, 'Run Commands');
+        await t.typeText(workbenchPage.MonacoEditor.monacoShortcutInput, 'Run Commands');
         // Select "Run Commands" from menu
-        await t.click(workbenchPage.monacoSuggestionOption);
+        await t.click(workbenchPage.MonacoEditor.monacoSuggestionOption);
         // Check the result with sent command
         await t.expect(workbenchPage.queryCardCommand.withExactText(command).exists).ok('The result of sent command is not displayed');
     });

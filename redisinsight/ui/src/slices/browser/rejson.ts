@@ -1,7 +1,8 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
-import axios, { CancelTokenSource } from 'axios'
-import * as jsonpath from 'jsonpath'
+import axios, { AxiosError, CancelTokenSource } from 'axios'
 
+import { isNumber } from 'lodash'
+import { JSONbig } from 'json-bigint'
 import { ApiEndpoints } from 'uiSrc/constants'
 import { apiService } from 'uiSrc/services'
 import { getBasedOnViewTypeEvent, sendEventTelemetry, TelemetryEvent, getJsonPathLevel } from 'uiSrc/telemetry'
@@ -13,20 +14,23 @@ import {
   Nullable,
 } from 'uiSrc/utils'
 import successMessages from 'uiSrc/components/notifications/success-messages'
+import { parseJsonData } from 'uiSrc/pages/browser/modules/key-details/components/rejson-details/utils'
 
 import {
   GetRejsonRlResponseDto,
   RemoveRejsonRlResponse,
-} from 'apiSrc/modules/browser/dto/rejson-rl.dto'
+} from 'apiSrc/modules/browser/rejson-rl/dto'
 
 import { refreshKeyInfoAction } from './keys'
 import { InitialStateRejson, RedisResponseBuffer } from '../interfaces'
 import { addErrorNotification, addMessageNotification } from '../app/notifications'
 import { AppDispatch, RootState } from '../store'
 
+const JSON_LENGTH_TO_FORCE_RETRIEVE = 200
+
 export const initialState: InitialStateRejson = {
   loading: false,
-  error: '',
+  error: null,
   data: {
     downloaded: false,
     data: undefined,
@@ -42,7 +46,7 @@ const rejsonSlice = createSlice({
     // load reJSON part
     loadRejsonBranch: (state, { payload: resetData = true }: PayloadAction<Maybe<boolean>>) => {
       state.loading = true
-      state.error = ''
+      state.error = null
 
       if (resetData) {
         state.data = initialState.data
@@ -58,11 +62,11 @@ const rejsonSlice = createSlice({
     },
     appendReJSONArrayItem: (state) => {
       state.loading = true
-      state.error = ''
+      state.error = null
     },
     appendReJSONArrayItemSuccess: (state) => {
       state.loading = false
-      state.error = ''
+      state.error = null
     },
     appendReJSONArrayItemFailure: (state, { payload }) => {
       state.loading = false
@@ -70,11 +74,11 @@ const rejsonSlice = createSlice({
     },
     setReJSONData: (state) => {
       state.loading = true
-      state.error = ''
+      state.error = null
     },
     setReJSONDataSuccess: (state) => {
       state.loading = false
-      state.error = ''
+      state.error = null
     },
     setReJSONDataFailure: (state, { payload }) => {
       state.loading = false
@@ -82,11 +86,11 @@ const rejsonSlice = createSlice({
     },
     removeRejsonKey: (state) => {
       state.loading = true
-      state.error = ''
+      state.error = null
     },
     removeRejsonKeySuccess: (state) => {
       state.loading = false
-      state.error = ''
+      state.error = null
     },
     removeRejsonKeyFailure: (state, { payload }) => {
       state.loading = false
@@ -123,7 +127,12 @@ export default rejsonSlice.reducer
 export let sourceRejson: Nullable<CancelTokenSource> = null
 
 // Asynchronous thunk action
-export function fetchReJSON(key: RedisResponseBuffer, path = '.', resetData?: boolean) {
+export function fetchReJSON(
+  key: RedisResponseBuffer,
+  path = '$',
+  length?: number,
+  resetData?: boolean,
+) {
   return async (dispatch: AppDispatch, stateInit: () => RootState) => {
     dispatch(loadRejsonBranch(resetData))
 
@@ -143,7 +152,7 @@ export function fetchReJSON(key: RedisResponseBuffer, path = '.', resetData?: bo
         {
           keyName: key,
           path,
-          forceRetrieve: false,
+          forceRetrieve: isNumber(length) && length > JSON_LENGTH_TO_FORCE_RETRIEVE,
           encoding,
         },
         { cancelToken: sourceRejson.token }
@@ -155,7 +164,7 @@ export function fetchReJSON(key: RedisResponseBuffer, path = '.', resetData?: bo
       }
     } catch (error) {
       if (!axios.isCancel(error)) {
-        const errorMessage = getApiErrorMessage(error)
+        const errorMessage = getApiErrorMessage(error as AxiosError)
         dispatch(loadRejsonBranchFailure(errorMessage))
         dispatch(addErrorNotification(error))
       }
@@ -165,9 +174,11 @@ export function fetchReJSON(key: RedisResponseBuffer, path = '.', resetData?: bo
 
 // Asynchronous thunk action
 export function setReJSONDataAction(
-  key: string,
+  key: RedisResponseBuffer,
   path: string,
   data: string,
+  isEditMode: boolean,
+  length?: number,
   onSuccessAction?: () => void,
   onFailAction?: () => void
 ) {
@@ -190,7 +201,6 @@ export function setReJSONDataAction(
 
       if (isStatusSuccessful(status)) {
         try {
-          const isEditMode = jsonpath.query(state.browser.rejson?.data?.data, `$..${path}`).length > 0
           sendEventTelemetry({
             event: getBasedOnViewTypeEvent(
               state.browser.keys?.viewType,
@@ -207,7 +217,7 @@ export function setReJSONDataAction(
         }
 
         dispatch(setReJSONDataSuccess())
-        dispatch<any>(fetchReJSON(key, '.'))
+        dispatch<any>(fetchReJSON(key, '$', length))
         dispatch<any>(refreshKeyInfoAction(key))
         onSuccessAction?.()
       }
@@ -222,9 +232,10 @@ export function setReJSONDataAction(
 
 // Asynchronous thunk action
 export function appendReJSONArrayItemAction(
-  key: string,
+  key: RedisResponseBuffer,
   path: string,
-  data: string
+  data: string,
+  length?: number
 ) {
   return async (dispatch: AppDispatch, stateInit: () => RootState) => {
     dispatch(appendReJSONArrayItem())
@@ -244,7 +255,7 @@ export function appendReJSONArrayItemAction(
       )
 
       if (isStatusSuccessful(status)) {
-        const keyLevel = path === '.' ? '0' : getJsonPathLevel(`${path}[0]`)
+        const keyLevel = path === '$' ? '0' : getJsonPathLevel(`${path}[0]`)
         sendEventTelemetry({
           event: getBasedOnViewTypeEvent(
             state.browser.keys?.viewType,
@@ -257,7 +268,7 @@ export function appendReJSONArrayItemAction(
           }
         })
         dispatch(appendReJSONArrayItemSuccess())
-        dispatch<any>(fetchReJSON(key, '.'))
+        dispatch<any>(fetchReJSON(key, '$', length))
         dispatch<any>(refreshKeyInfoAction(key))
       }
     } catch (error) {
@@ -270,9 +281,10 @@ export function appendReJSONArrayItemAction(
 
 // Asynchronous thunk action
 export function removeReJSONKeyAction(
-  key: string,
-  path = '.',
-  jsonKeyName = ''
+  key: RedisResponseBuffer,
+  path = '$',
+  jsonKeyName = '',
+  length?: number
 ) {
   return async (dispatch: AppDispatch, stateInit: () => RootState) => {
     dispatch(removeRejsonKey())
@@ -305,7 +317,7 @@ export function removeReJSONKeyAction(
           }
         })
         dispatch(removeRejsonKeySuccess())
-        dispatch<any>(fetchReJSON(key, '.'))
+        dispatch<any>(fetchReJSON(key, '$', length))
         dispatch<any>(refreshKeyInfoAction(key))
         dispatch(
           addMessageNotification(
@@ -314,22 +326,17 @@ export function removeReJSONKeyAction(
         )
       }
     } catch (error) {
-      const errorMessage = getApiErrorMessage(error)
+      const errorMessage = getApiErrorMessage(error as AxiosError)
       dispatch(removeRejsonKeyFailure(errorMessage))
-      dispatch(addErrorNotification(error))
+      dispatch(addErrorNotification(error as AxiosError))
     }
   }
 }
 
 // Asynchronous thunk action
-export function fetchVisualisationResults(path = '.', forceRetrieve = false) {
+export function fetchVisualisationResults(path = '$', forceRetrieve = false) {
   return async (dispatch: AppDispatch, stateInit: () => RootState) => {
     try {
-      sourceRejson?.cancel()
-
-      const { CancelToken } = axios
-      sourceRejson = CancelToken.source()
-
       const state = stateInit()
       const { encoding } = state.app.info
       const key = state.browser.keys?.selectedKey?.data?.name
@@ -343,16 +350,18 @@ export function fetchVisualisationResults(path = '.', forceRetrieve = false) {
           path,
           forceRetrieve,
           encoding,
-        },
-        { cancelToken: sourceRejson.token }
+        }
       )
 
-      sourceRejson = null
       if (isStatusSuccessful(status)) {
-        return data
+        return {
+          ...data,
+          data: parseJsonData(data?.data)
+        }
       }
       throw new Error(data.toString())
-    } catch (error) {
+    } catch (_err) {
+      const error = _err as AxiosError
       if (!axios.isCancel(error)) {
         const errorMessage = getApiErrorMessage(error)
         dispatch(loadRejsonBranchFailure(errorMessage))

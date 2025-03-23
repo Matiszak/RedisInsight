@@ -1,25 +1,31 @@
 /* eslint-disable sonarjs/no-duplicate-string */
-import { cloneDeep } from 'lodash'
+import { cloneDeep, set } from 'lodash'
 import React from 'react'
 import MockedSocket from 'socket.io-mock'
 import socketIO from 'socket.io-client'
-import { cleanup, mockedStore, render } from 'uiSrc/utils/test-utils'
-import { BulkActionsServerEvent, BulkActionsType, SocketEvent } from 'uiSrc/constants'
+import { cleanup, initialStateDefault, mockedStore, mockStore, render } from 'uiSrc/utils/test-utils'
+import { BulkActionsServerEvent, BulkActionsStatus, BulkActionsType, FeatureFlags, SocketEvent } from 'uiSrc/constants'
 import {
   bulkActionsDeleteSelector,
   bulkActionsSelector,
   disconnectBulkDeleteAction,
   setBulkActionConnected,
-  setBulkDeleteLoading
+  setBulkDeleteLoading, setDeleteOverviewStatus
 } from 'uiSrc/slices/browser/bulkActions'
+import { GlobalSubscriptions } from 'uiSrc/components'
+import * as ioHooks from 'uiSrc/services/hooks/useIoConnection'
+import { getSocketApiUrl } from 'uiSrc/utils'
 import BulkActionsConfig from './BulkActionsConfig'
 
 let store: typeof mockedStore
 let socket: typeof MockedSocket
+let useIoConnectionSpy: jest.SpyInstance
+
 beforeEach(() => {
   cleanup()
   socket = new MockedSocket()
   socketIO.mockReturnValue(socket)
+  useIoConnectionSpy = jest.spyOn(ioHooks, 'useIoConnection')
   store = cloneDeep(mockedStore)
   store.clearActions()
 })
@@ -74,6 +80,26 @@ describe('BulkActionsConfig', () => {
       setBulkDeleteLoading(true)
     ]
     expect(store.getActions()).toEqual([...afterRenderActions])
+    expect(useIoConnectionSpy)
+      .toHaveBeenCalledWith(getSocketApiUrl('bulk-actions'), { query: { instanceId: '1' }, token: '' })
+  })
+
+  it('should not connect socket', () => {
+    const initialStoreState = set(
+      cloneDeep(initialStateDefault),
+      `app.features.featureFlags.features.${FeatureFlags.envDependent}`,
+      { flag: false }
+    )
+
+    const { unmount } = render(<GlobalSubscriptions />, {
+      store: mockStore(initialStoreState)
+    })
+
+    socket.socketClient.emit(SocketEvent.Connect)
+
+    expect(store.getActions()).toEqual([])
+
+    unmount()
   })
 
   it('should emit Create a delete type', () => {
@@ -110,6 +136,7 @@ describe('BulkActionsConfig', () => {
     const afterRenderActions = [
       setBulkActionConnected(true),
       setBulkDeleteLoading(true),
+      setDeleteOverviewStatus(BulkActionsStatus.Disconnected),
       disconnectBulkDeleteAction(),
     ]
     expect(store.getActions()).toEqual([...afterRenderActions])

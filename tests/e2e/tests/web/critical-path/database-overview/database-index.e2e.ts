@@ -48,7 +48,6 @@ fixture `Allow to change database index`
     });
 test('Switching between indexed databases', async t => {
     const command = `HSET ${logicalDbKey} "name" "Gillford School" "description" "Gillford School is a centre" "class" "private" "type" "democratic; waldorf" "address_city" "Goudhurst" "address_street" "Goudhurst" "students" 721 "location" "51.112685, 0.451076"`;
-    const rememberedConnectedClients = await browserPage.overviewConnectedClients.textContent;
 
     // Change index to logical db
     // Verify that database index switcher displayed for Standalone db
@@ -106,13 +105,13 @@ test('Switching between indexed databases', async t => {
     await verifySearchFilterValue('Hall School');
 
     // Open Workbench page
-    await t.click(myRedisDatabasePage.NavigationPanel.workbenchButton);
+    await t.click(browserPage.NavigationPanel.workbenchButton);
     await workbenchPage.sendCommandInWorkbench(command);
     // Verify that user can see the database index before the command name executed in Workbench
     await workbenchPage.checkWorkbenchCommandResult(`[db1] ${command}`, '8');
 
     // Open Browser page
-    await t.click(myRedisDatabasePage.NavigationPanel.browserButton);
+    await t.click(browserPage.NavigationPanel.browserButton);
     // Clear filter
     await t.click(browserPage.clearFilterButton);
     // Verify that data changed for indexed db on Workbench page (on Search capability page)

@@ -2,11 +2,15 @@ import { useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useLocation } from 'react-router-dom'
 import { isNumber } from 'lodash'
-import { BrowserStorageItem } from 'uiSrc/constants'
+import { BrowserStorageItem, FeatureFlags } from 'uiSrc/constants'
 import { BuildType } from 'uiSrc/constants/env'
 import { BUILD_FEATURES } from 'uiSrc/constants/featuresHighlighting'
-import { localStorageService } from 'uiSrc/services'
-import { fetchFeatureFlags, setFeaturesToHighlight, setOnboarding } from 'uiSrc/slices/app/features'
+import { localStorageService, setObjectStorage } from 'uiSrc/services'
+import {
+  appFeatureFlagsFeaturesSelector,
+  setFeaturesToHighlight,
+  setOnboarding
+} from 'uiSrc/slices/app/features'
 import { fetchNotificationsAction } from 'uiSrc/slices/app/notifications'
 
 import {
@@ -18,53 +22,88 @@ import {
 import {
   fetchServerInfo,
   appServerInfoSelector,
+  setServerLoaded
 } from 'uiSrc/slices/app/info'
 
-import { setFavicon, isDifferentConsentsExists } from 'uiSrc/utils'
+import { isDifferentConsentsExists } from 'uiSrc/utils'
 import { fetchUnsupportedCliCommandsAction } from 'uiSrc/slices/cli/cli-settings'
 import { fetchRedisCommandsInfo } from 'uiSrc/slices/app/redis-commands'
-import { fetchGuides } from 'uiSrc/slices/workbench/wb-guides'
 import { fetchTutorials } from 'uiSrc/slices/workbench/wb-tutorials'
+import { fetchCustomTutorials } from 'uiSrc/slices/workbench/wb-custom-tutorials'
 import { ONBOARDING_FEATURES } from 'uiSrc/components/onboarding-features'
 import { fetchContentRecommendations } from 'uiSrc/slices/recommendations/recommendations'
 import { fetchGuideLinksAction } from 'uiSrc/slices/content/guide-links'
+import { setCapability } from 'uiSrc/slices/app/context'
 
-import favicon from 'uiSrc/assets/favicon.ico'
+import { fetchProfile } from 'uiSrc/slices/oauth/cloud'
+import { fetchDBSettings } from 'uiSrc/slices/app/db-settings'
+import { connectedInstanceSelector } from 'uiSrc/slices/instances/instances'
+import { DatabaseSettingsData } from 'uiSrc/slices/interfaces'
 
 const SETTINGS_PAGE_PATH = '/settings'
 const Config = () => {
   const serverInfo = useSelector(appServerInfoSelector)
+  const { id } = useSelector(connectedInstanceSelector)
   const { config, spec } = useSelector(userSettingsSelector)
+  const {
+    [FeatureFlags.cloudSso]: cloudSsoFeature,
+    [FeatureFlags.envDependent]: envDependentFeature
+  } = useSelector(appFeatureFlagsFeaturesSelector)
   const { pathname } = useLocation()
 
   const dispatch = useDispatch()
   useEffect(() => {
-    setFavicon(favicon)
+    dispatch(setCapability(localStorageService?.get(BrowserStorageItem.capability)))
+    if (envDependentFeature?.flag) {
+      dispatch(fetchServerInfo())
+      dispatch(fetchNotificationsAction())
+      dispatch(fetchCustomTutorials())
+    } else {
+      dispatch(setServerLoaded())
+    }
 
-    dispatch(fetchServerInfo())
     dispatch(fetchUnsupportedCliCommandsAction())
     dispatch(fetchRedisCommandsInfo())
-    dispatch(fetchNotificationsAction())
     dispatch(fetchContentRecommendations())
     dispatch(fetchGuideLinksAction())
 
-    // get guides & tutorials
-    dispatch(fetchGuides())
+    // get tutorials
     dispatch(fetchTutorials())
-
-    dispatch(fetchFeatureFlags())
 
     // fetch config settings, after that take spec
     if (pathname !== SETTINGS_PAGE_PATH) {
-      dispatch(fetchUserConfigSettings(() => dispatch(fetchUserSettingsSpec())))
+      dispatch(fetchUserConfigSettings(() => {
+        if (envDependentFeature?.flag) {
+          dispatch(fetchUserSettingsSpec())
+        }
+      }))
     }
   }, [])
 
   useEffect(() => {
-    if (config && spec) {
+    if (id) {
+      // fetch db settings and store them in local storage
+      dispatch(fetchDBSettings(id, (payload: {
+        id: string,
+        data: DatabaseSettingsData
+      }) => {
+        // set DB Config Storage
+        setObjectStorage(BrowserStorageItem.dbConfig + payload.id, payload.data)
+      }))
+    }
+  }, [id])
+
+  useEffect(() => {
+    if (config && spec && envDependentFeature?.flag) {
       checkSettingsToShowPopup()
     }
   }, [spec])
+
+  useEffect(() => {
+    if (cloudSsoFeature?.flag) {
+      dispatch(fetchProfile())
+    }
+  }, [cloudSsoFeature?.flag])
 
   useEffect(() => {
     featuresHighlight()

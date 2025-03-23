@@ -3,14 +3,12 @@ import {
   BrowserPage, InstancePage,
 } from 'uiSrc/pages'
 import WorkbenchPage from 'uiSrc/pages/workbench'
-import SlowLogPage from 'uiSrc/pages/slowLog'
-import PubSubPage from 'uiSrc/pages/pubSub'
-import EditConnection from 'uiSrc/pages/redisStack/components/edit-connection'
-import ClusterDetailsPage from 'uiSrc/pages/clusterDetails'
+import SlowLogPage from 'uiSrc/pages/slow-log'
+import PubSubPage from 'uiSrc/pages/pub-sub'
+import EditConnection from 'uiSrc/pages/redis-stack/components/edit-connection'
+import ClusterDetailsPage from 'uiSrc/pages/cluster-details'
 import AnalyticsPage from 'uiSrc/pages/analytics'
-import DatabaseAnalysisPage from 'uiSrc/pages/databaseAnalysis'
-import TriggeredFunctionsPage from 'uiSrc/pages/triggeredFunctions'
-import { LibrariesPage, FunctionsPage } from 'uiSrc/pages/triggeredFunctions/pages'
+import DatabaseAnalysisPage from 'uiSrc/pages/database-analysis'
 import COMMON_ROUTES from './commonRoutes'
 
 const ANALYTICS_ROUTES: IRoute[] = [
@@ -31,21 +29,6 @@ const ANALYTICS_ROUTES: IRoute[] = [
     protected: true,
     path: Pages.clusterDetails(':instanceId'),
     component: ClusterDetailsPage,
-  },
-]
-
-const TRIGGERED_FUNCTIONS_ROUTES: IRoute[] = [
-  {
-    pageName: PageNames.triggeredFunctionsFunctions,
-    path: Pages.triggeredFunctionsFunctions(':instanceId'),
-    protected: true,
-    component: FunctionsPage,
-  },
-  {
-    pageName: PageNames.triggeredFunctionsLibraries,
-    path: Pages.triggeredFunctionsLibraries(':instanceId'),
-    protected: true,
-    component: LibrariesPage,
   },
 ]
 
@@ -74,11 +57,6 @@ const INSTANCE_ROUTES: IRoute[] = [
     component: AnalyticsPage,
     routes: ANALYTICS_ROUTES,
   },
-  {
-    path: Pages.triggeredFunctions(':instanceId'),
-    component: TriggeredFunctionsPage,
-    routes: TRIGGERED_FUNCTIONS_ROUTES
-  }
 ]
 
 const ROUTES: IRoute[] = [

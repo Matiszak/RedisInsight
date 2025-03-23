@@ -1,4 +1,4 @@
-import { first, isNull, map, find, orderBy, get } from 'lodash'
+import { first, isNull, map, filter, orderBy, get } from 'lodash'
 import { createSlice } from '@reduxjs/toolkit'
 import axios, { AxiosError, CancelTokenSource } from 'axios'
 
@@ -34,7 +34,7 @@ export const initialState: InitialStateInstances = {
   errorChanging: '',
   changedSuccessfully: false,
   deletedSuccessfully: false,
-  freeInstance: null,
+  freeInstances: [],
   connectedInstance: {
     id: '',
     name: '',
@@ -47,7 +47,6 @@ export const initialState: InitialStateInstances = {
     isRediStack: false,
     modules: [],
     loading: false,
-    isFreeDb: false,
   },
   editedInstance: {
     loading: false,
@@ -81,10 +80,10 @@ const instancesSlice = createSlice({
     loadInstancesSuccess: (state, { payload }: { payload: DatabaseInstanceResponse[] }) => {
       state.data = checkRediStack(payload)
       state.loading = false
-      state.freeInstance = find(
+      state.freeInstances = filter(
         [...(orderBy(payload, 'lastConnection', 'desc'))],
         'cloudDetails.free'
-      ) as unknown as Instance || null
+      ) as unknown as Instance[] || null
       if (state.connectedInstance.id) {
         const isRediStack = state.data.find((db) => db.id === state.connectedInstance.id)?.isRediStack
         state.connectedInstance.isRediStack = isRediStack || false
@@ -191,6 +190,7 @@ const instancesSlice = createSlice({
       state.connectedInstance = payload
       state.connectedInstance.loading = false
       state.connectedInstance.isRediStack = isRediStack || false
+      state.connectedInstance.isFreeDb = payload.cloudDetails?.free || false
       state.connectedInstance.db = sessionStorageService.get(`${BrowserStorageItem.dbIndex}${payload.id}`) ?? payload.db
     },
 
@@ -302,9 +302,11 @@ export const {
 
 // selectors
 export const instancesSelector = (state: RootState) => state.connections.instances
-export const freeInstanceSelector = (state: RootState) => state.connections.instances.freeInstance
+export const freeInstancesSelector = (state: RootState) => state.connections.instances.freeInstances
 export const connectedInstanceSelector = (state: RootState) =>
   state.connections.instances.connectedInstance
+export const connectedInstanceCDSelector = (state: RootState) =>
+  state.connections.instances.connectedInstance.cloudDetails
 export const connectedInstanceInfoSelector = (state: RootState) =>
   state.connections.instances.instanceInfo
 export const editedInstanceSelector = (state: RootState) =>
@@ -321,8 +323,14 @@ export default instancesSlice.reducer
 export let sourceInstance: Nullable<CancelTokenSource> = null
 
 // Asynchronous thunk action
-export function fetchInstancesAction(onSuccess?: (data?: DatabaseInstanceResponse[]) => void) {
-  return async (dispatch: AppDispatch) => {
+export function fetchInstancesAction(onSuccess?: (data: Instance[]) => void) {
+  return async (dispatch: AppDispatch, stateInit: () => RootState) => {
+    const envDependentFeature = get(stateInit(), ['app', 'features', 'featureFlags', 'features', 'envDependent'])
+
+    if (!envDependentFeature?.flag) {
+      return
+    }
+
     dispatch(loadInstances())
 
     try {
@@ -330,7 +338,7 @@ export function fetchInstancesAction(onSuccess?: (data?: DatabaseInstanceRespons
 
       if (isStatusSuccessful(status)) {
         localStorageService.set(BrowserStorageItem.instancesCount, data?.length)
-        onSuccess?.(data)
+        onSuccess?.(data as Instance[])
         dispatch(loadInstancesSuccess(data))
       }
     } catch (_err) {
@@ -471,7 +479,7 @@ function autoCreateAndConnectToInstanceActionSuccess(
 }
 
 // Asynchronous thunk action
-export function updateInstanceAction({ id, ...payload }: Instance, onSuccess?: () => void) {
+export function updateInstanceAction({ id, ...payload }: Partial<Instance>, onSuccess?: () => void) {
   return async (dispatch: AppDispatch) => {
     dispatch(defaultInstanceChanging())
 
@@ -498,13 +506,13 @@ export function cloneInstanceAction({ id, ...payload }: Partial<Instance>, onSuc
     dispatch(defaultInstanceChanging())
 
     try {
-      const { status } = await apiService.post(`${ApiEndpoints.DATABASES}/clone/${id}`, payload)
+      const { status, data } = await apiService.post(`${ApiEndpoints.DATABASES}/clone/${id}`, payload)
 
       if (isStatusSuccessful(status)) {
         dispatch(defaultInstanceChangingSuccess())
         dispatch<any>(fetchInstancesAction())
 
-        dispatch(addMessageNotification(successMessages.ADDED_NEW_INSTANCE(payload.name ?? '')))
+        dispatch(addMessageNotification(successMessages.ADDED_NEW_INSTANCE(data.name ?? '')))
         onSuccess?.(id)
       }
     } catch (_err) {
@@ -593,7 +601,7 @@ export function exportInstancesAction(
 }
 
 // Asynchronous thunk action
-export function fetchConnectedInstanceAction(id: string, onSuccess?: () => void) {
+export function fetchConnectedInstanceAction(id: string, onSuccess?: () => void, onFail?: () => void) {
   return async (dispatch: AppDispatch) => {
     dispatch(setDefaultInstance())
     dispatch(setConnectedInstance())
@@ -611,6 +619,7 @@ export function fetchConnectedInstanceAction(id: string, onSuccess?: () => void)
       const errorMessage = getApiErrorMessage(error)
       dispatch(setDefaultInstanceFailure(errorMessage))
       dispatch(addErrorNotification(error))
+      onFail?.()
     }
   }
 }
@@ -796,7 +805,7 @@ export function resetInstanceUpdateAction() {
 // Asynchronous thunk action
 export function uploadInstancesFile(
   file: FormData,
-  onSuccessAction?: () => void,
+  onSuccessAction?: (data: any) => void,
   onFailAction?: () => void
 ) {
   return async (dispatch: AppDispatch) => {
@@ -816,7 +825,7 @@ export function uploadInstancesFile(
 
       if (isStatusSuccessful(status)) {
         dispatch(importInstancesFromFileSuccess(data))
-        onSuccessAction?.()
+        onSuccessAction?.(data)
       }
     } catch (_err) {
       const error = _err as AxiosError

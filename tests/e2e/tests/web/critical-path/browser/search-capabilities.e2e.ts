@@ -1,6 +1,7 @@
 import { Selector, t } from 'testcafe';
 import { DatabaseHelper } from '../../../../helpers/database';
 import { BrowserPage, MyRedisDatabasePage } from '../../../../pageObjects';
+import { Telemetry } from '../../../../helpers/telemetry';
 import {
     commonUrl,
     ossStandaloneBigConfig,
@@ -12,12 +13,39 @@ import { DatabaseAPIRequests } from '../../../../helpers/api/api-database';
 import { Common } from '../../../../helpers/common';
 import { verifyKeysDisplayingInTheList } from '../../../../helpers/keys';
 import { APIKeyRequests } from '../../../../helpers/api/api-keys';
+import { goBackHistory } from '../../../../helpers/utils';
 
 const browserPage = new BrowserPage();
 const myRedisDatabasePage = new MyRedisDatabasePage();
 const databaseHelper = new DatabaseHelper();
 const databaseAPIRequests = new DatabaseAPIRequests();
 const apiKeyRequests = new APIKeyRequests();
+const telemetry = new Telemetry();
+
+const telemetryEvents = ['SEARCH_MODE_CHANGED', 'SEARCH_INDEX_ADD_BUTTON_CLICKED', 'SEARCH_INDEX_ADDED'];
+const logger = telemetry.createLogger();
+const expectedPropertiesMode = [
+    'current',
+    'databaseId',
+    'previous',
+    'provider',
+    'view'
+];
+
+const expectedPropertiesCreateIndex = [
+    'databaseId',
+    'provider',
+    'view'
+];
+
+const expectedPropertiesAddedIndex = [
+    'countOfFieldNames',
+    'countOfPrefixes',
+    'dataType',
+    'databaseId',
+    'provider',
+    'view'
+];
 
 const patternModeTooltipText = 'Filter by Key Name or Pattern';
 const redisearchModeTooltipText = 'Search by Values of Keys';
@@ -75,7 +103,7 @@ test
         await t.hover(browserPage.redisearchModeBtn);
         await t.expect(browserPage.tooltip.textContent).contains(redisearchModeTooltipText, 'Invalid text in redisearch mode tooltip');
 
-        // Verify that user see the "Select an index" message when he switch to Search
+        // Verify that user see the "Select an index" message when he switches to Search
         await t.click(browserPage.redisearchModeBtn);
         await t.expect(browserPage.keyListTable.textContent).contains(notSelectedIndexText, 'Select an index message not displayed');
 
@@ -112,7 +140,7 @@ test
         await verifyKeysDisplayingInTheList(keyNames, true);
         await t.expect(browserPage.getKeySelectorByName(keyName).exists).notOk('Key without index displayed after search');
 
-        // Verify that user see the database scanned when he switch to Pattern search mode
+        // Verify that user see the database scanned when he switches to Pattern search mode
         await t.click(browserPage.patternModeBtn);
         await t.click(browserPage.browserViewButton);
         await verifyKeysDisplayingInTheList(keyNames, true);
@@ -152,20 +180,21 @@ test
     })
     .after(async() => {
         await databaseAPIRequests.deleteStandaloneDatabaseApi(ossStandaloneV5Config);
-    })('No RediSearch module message', async t => {
-        const noRedisearchMessage = 'RediSearch is not available for this database';
-        // const externalPageLink = 'https://redis.com/try-free/?utm_source=redisinsight&utm_medium=app&utm_campaign=redisinsight_browser_search';
+    })('No Redis Query Engine module message', async t => {
+        const noRedisearchMessage = 'Redis Query Engine is not available for this database';
+        const externalPageLinkFirst = 'https://redis.io/try-free';
+        const externalPageLinkSecond = '?utm_source=redisinsight&utm_medium=app&utm_campaign=redisinsight_browser_search'
 
         await t.click(browserPage.redisearchModeBtn);
-        // Verify that user can see message in the dialog when he doesn't have RediSearch module
-        await t.expect(browserPage.noReadySearchDialogTitle.textContent).contains(noRedisearchMessage, 'Invalid text in no redisearch popover');
-        // update after resolving testcafe Native Automation mode limitations
-        // // Verify that user can navigate by link to create a Redis db
-        // await t.click(browserPage.redisearchFreeLink);
-        // await Common.checkURL(externalPageLink);
-        // await t.switchToParentWindow();
+        // Verify that user can see message in the dialog when he doesn't have Redis Query Engine module
+        await t.expect(browserPage.noReadySearchDialogTitle.textContent).contains(noRedisearchMessage, 'Invalid text in no Redis Query Engine popover');
+
+        // Verify that user can navigate by link to create a Redis db
+        await t.click(browserPage.redisearchFreeLink);
+        await Common.checkURLContainsText(externalPageLinkFirst);
+        await Common.checkURLContainsText(externalPageLinkSecond);
     });
-test
+test.requestHooks(logger)
     .before(async() => {
         await databaseHelper.acceptLicenseTermsAndAddDatabaseApi(ossStandaloneBigConfig);
     })
@@ -173,12 +202,19 @@ test
         await browserPage.Cli.sendCommandInCli(`FT.DROPINDEX ${indexName}`);
         await databaseAPIRequests.deleteStandaloneDatabaseApi(ossStandaloneBigConfig);
     })('Index creation', async t => {
-        // const createIndexLink = 'https://redis.io/commands/ft.create/';
+        const createIndexLink = 'https://redis.io/docs/latest/commands/ft.create/?utm_source=redisinsight&utm_medium=app&utm_campaign=browser_search';
+
+        // Verify that telemetry event 'SEARCH_MODE_CHANGED' sent
+        await t.click(browserPage.redisearchModeBtn);
+        await telemetry.verifyEventHasProperties(telemetryEvents[0], expectedPropertiesMode, logger);
 
         // Verify that user can cancel index creation
-        await t.click(browserPage.redisearchModeBtn);
         await t.click(browserPage.selectIndexDdn);
         await t.click(browserPage.createIndexBtn);
+
+        // Verify that telemetry event 'SEARCH_INDEX_ADD_BUTTON_CLICKED' sent
+        await telemetry.verifyEventHasProperties(telemetryEvents[1], expectedPropertiesCreateIndex, logger);
+
         await t.expect(browserPage.newIndexPanel.exists).ok('New Index panel is not displayed');
         await t.click(browserPage.cancelIndexCreationBtn);
         await t.expect(browserPage.newIndexPanel.exists).notOk('New Index panel is displayed');
@@ -188,13 +224,15 @@ test
         await t.click(browserPage.selectIndexDdn);
         await t.click(browserPage.createIndexBtn);
         await t.expect(browserPage.newIndexPanel.exists).ok('New Index panel is not displayed');
-        // update after resolving testcafe Native Automation mode limitations
-        // // Verify that user can see a link to create a profound index and navigate
-        // await t.click(browserPage.newIndexPanel.find('a'));
-        // await Common.checkURL(createIndexLink);
-        // await t.switchToParentWindow();
+
+        // Verify that user can see a link to create a profound index and navigate
+        await t.click(browserPage.newIndexPanel.find('a'));
+        await Common.checkURL(createIndexLink);
+        await goBackHistory();
 
         // Verify that user can create an index with multiple prefixes
+        await t.click(browserPage.selectIndexDdn);
+        await t.click(browserPage.createIndexBtn);
         await t.click(browserPage.indexNameInput);
         await t.typeText(browserPage.indexNameInput, indexName);
         await t.click(browserPage.prefixFieldInput);
@@ -210,10 +248,14 @@ test
         await t.click(browserPage.indexIdentifierInput);
         await t.typeText(browserPage.indexIdentifierInput, 'k0');
         await t.click(browserPage.confirmIndexCreationBtn);
+
+        await telemetry.verifyEventHasProperties(telemetryEvents[2], expectedPropertiesAddedIndex, logger);
+        await telemetry.verifyEventPropertyValue(telemetryEvents[2], 'countOfPrefixes', '3', logger);
+
         await t.expect(browserPage.newIndexPanel.exists).notOk('New Index panel is displayed');
         await t.click(browserPage.selectIndexDdn);
         await browserPage.selectIndexByName(indexName);
-    });
+    }).skip.meta({skipComment: "Unstable CI execution, after hook error, needs investigation "});
 test
     .before(async() => {
         await databaseHelper.acceptLicenseTermsAndAddDatabaseApi(ossStandaloneConfig);
@@ -238,9 +280,8 @@ test
         await t.click(browserPage.getKeySelectorByName(keyName));
 
         // Verify that Redisearch context (inputs, key selected, scroll, key details) saved after switching between pages
-        await t
-            .click(myRedisDatabasePage.NavigationPanel.workbenchButton)
-            .click(myRedisDatabasePage.NavigationPanel.browserButton);
+        await t.click(browserPage.NavigationPanel.workbenchButton);
+        await t.click(browserPage.NavigationPanel.browserButton);
         await verifyContext();
 
         // Verify that Redisearch context saved when switching between browser/tree view

@@ -1,34 +1,40 @@
 import { RedisDefaultModules } from 'uiSrc/slices/interfaces'
-import { IDatabaseModule, isContainJSONModule, isRedisearchAvailable, sortModules } from 'uiSrc/utils/modules'
+import {
+  getDbWithModuleLoaded,
+  IDatabaseModule,
+  isContainJSONModule,
+  isRedisearchAvailable,
+  sortModules
+} from 'uiSrc/utils/modules'
 
 const modules1: IDatabaseModule[] = [
-  { moduleName: 'RedisJSON', abbreviation: 'RS' },
+  { moduleName: 'JSON', abbreviation: 'RS' },
   { moduleName: 'My1Module', abbreviation: 'MD' },
-  { moduleName: 'RediSearch', abbreviation: 'RS' },
+  { moduleName: 'Redis Query Engine', abbreviation: 'RS' },
 ]
 const modules2: IDatabaseModule[] = [
   { moduleName: '', abbreviation: '' },
   { moduleName: '', abbreviation: '' },
-  { moduleName: 'RedisBloom', abbreviation: 'RS' },
+  { moduleName: 'Probabilistic', abbreviation: 'RS' },
   { moduleName: '', abbreviation: '' },
   { moduleName: '', abbreviation: '' },
   { moduleName: 'MycvModule', abbreviation: 'MC' },
   { moduleName: 'My1Module', abbreviation: 'MD' },
-  { moduleName: 'RedisJSON', abbreviation: 'RS' },
+  { moduleName: 'JSON', abbreviation: 'RS' },
   { moduleName: 'My2Modul2e', abbreviation: 'MX' },
-  { moduleName: 'RediSearch', abbreviation: 'RS' },
+  { moduleName: 'Redis Query Engine', abbreviation: 'RS' },
 ]
 
 const result1: IDatabaseModule[] = [
-  { moduleName: 'RediSearch', abbreviation: 'RS' },
-  { moduleName: 'RedisJSON', abbreviation: 'RS' },
+  { moduleName: 'Redis Query Engine', abbreviation: 'RS' },
+  { moduleName: 'JSON', abbreviation: 'RS' },
   { moduleName: 'My1Module', abbreviation: 'MD' }
 ]
 
 const result2: IDatabaseModule[] = [
-  { moduleName: 'RediSearch', abbreviation: 'RS' },
-  { moduleName: 'RedisJSON', abbreviation: 'RS' },
-  { moduleName: 'RedisBloom', abbreviation: 'RS' },
+  { moduleName: 'Redis Query Engine', abbreviation: 'RS' },
+  { moduleName: 'JSON', abbreviation: 'RS' },
+  { moduleName: 'Probabilistic', abbreviation: 'RS' },
   { moduleName: 'MycvModule', abbreviation: 'MC' },
   { moduleName: 'My1Module', abbreviation: 'MD' },
   { moduleName: 'My2Modul2e', abbreviation: 'MX' },
@@ -76,5 +82,49 @@ describe('isContainJSONModule', () => {
     (reply, expected) => {
       const result = isContainJSONModule(reply)
       expect(result).toBe(expected)
+    })
+})
+
+const getDbWithModuleLoadedTests: Array<{
+  input: [any, string],
+  expected: any
+}> = [
+  {
+    input: [
+      [
+        { id: '1', modules: [{ name: 'module1' }] },
+        { id: '2', modules: [{ name: 'module1' }] }
+      ],
+      'module1'
+    ],
+    expected: { id: '1', modules: [{ name: 'module1' }] }
+  },
+  {
+    input: [
+      [
+        { id: '1', modules: [{ name: 'module2' }] },
+        { id: '2', modules: [{ name: 'module3' }] }
+      ],
+      'module1'
+    ],
+    expected: undefined
+  },
+  {
+    input: [
+      [
+        { id: '1', modules: [{ name: 'redisgears' }] },
+        { id: '2', modules: [{ name: 'redisgears_2' }] }
+      ],
+      'redisgears'
+    ],
+    expected: { id: '1', modules: [{ name: 'redisgears' }] }
+  }
+]
+
+describe('getDbWithModuleLoaded', () => {
+  it.each(getDbWithModuleLoadedTests)('for input: %s (reply), should be output: %s',
+    ({ input, expected }) => {
+      const result = getDbWithModuleLoaded(...input)
+      expect(result).toEqual(expected)
     })
 })

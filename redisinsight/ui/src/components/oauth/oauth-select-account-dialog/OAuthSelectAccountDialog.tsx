@@ -15,6 +15,7 @@ import { useHistory } from 'react-router-dom'
 
 import {
   activateAccount,
+  createFreeDbJob,
   fetchPlans,
   oauthCloudPlanSelector,
   oauthCloudSelector,
@@ -26,8 +27,10 @@ import { Nullable } from 'uiSrc/utils'
 import { cloudSelector, fetchSubscriptionsRedisCloud } from 'uiSrc/slices/instances/cloud'
 import { TelemetryEvent, sendEventTelemetry } from 'uiSrc/telemetry'
 import { Pages } from 'uiSrc/constants'
-import { removeInfiniteNotification } from 'uiSrc/slices/app/notifications'
-import { InfiniteMessagesIds } from 'uiSrc/components/notifications/components'
+import { addInfiniteNotification, removeInfiniteNotification } from 'uiSrc/slices/app/notifications'
+import { INFINITE_MESSAGES, InfiniteMessagesIds } from 'uiSrc/components/notifications/components'
+import { CloudJobName, CloudJobStep } from 'uiSrc/electron/constants'
+import { OAuthSocialAction } from 'uiSrc/slices/interfaces'
 
 import styles from './styles.module.scss'
 
@@ -36,11 +39,13 @@ interface FormValues {
 }
 
 const OAuthSelectAccountDialog = () => {
-  const { isAutodiscoverySSO } = useSelector(cloudSelector)
+  const { ssoFlow, isRecommendedSettings } = useSelector(cloudSelector)
   const { accounts = [], currentAccountId } = useSelector(oauthCloudUserDataSelector) ?? {}
   const { isOpenSelectAccountDialog } = useSelector(oauthCloudSelector)
   const { loading } = useSelector(oauthCloudUserSelector)
   const { loading: plansLoadings } = useSelector(oauthCloudPlanSelector)
+
+  const isAutodiscoverySSO = ssoFlow === OAuthSocialAction.Import
 
   const history = useHistory()
   const dispatch = useDispatch()
@@ -66,6 +71,7 @@ const OAuthSelectAccountDialog = () => {
     if (isAutodiscoverySSO) {
       dispatch(fetchSubscriptionsRedisCloud(
         null,
+        true,
         () => {
           dispatch(removeInfiniteNotification(InfiniteMessagesIds.oAuthProgress))
           history.push(Pages.redisCloudSubscriptions)
@@ -75,6 +81,20 @@ const OAuthSelectAccountDialog = () => {
         }
       ))
       dispatch(setSelectAccountDialogState(false))
+    } else if (isRecommendedSettings) {
+      dispatch(createFreeDbJob({
+        name: CloudJobName.CreateFreeSubscriptionAndDatabase,
+        resources: {
+          isRecommendedSettings
+        },
+        onSuccessAction: () => {
+          dispatch(setSelectAccountDialogState(false))
+          dispatch(addInfiniteNotification(INFINITE_MESSAGES.PENDING_CREATE_DB(CloudJobStep.Credentials)))
+        },
+        onFailAction: () => {
+          dispatch(removeInfiniteNotification(InfiniteMessagesIds.oAuthProgress))
+        }
+      }))
     } else {
       dispatch(fetchPlans())
     }
@@ -82,11 +102,11 @@ const OAuthSelectAccountDialog = () => {
     sendEventTelemetry({
       event: TelemetryEvent.CLOUD_SIGN_IN_ACCOUNT_SELECTED,
       eventData: {
-        action: isAutodiscoverySSO ? 'import' : 'create',
+        action: ssoFlow,
         accountsCount: accounts.length
       },
     })
-  }, [isAutodiscoverySSO, accounts])
+  }, [isAutodiscoverySSO, isRecommendedSettings, accounts])
 
   const onActivateAccountFail = useCallback((error: string) => {
     sendEventTelemetry({

@@ -19,7 +19,8 @@ import reducer, {
   loadAccountRedisCloudFailure,
   loadAccountRedisCloudSuccess,
   loadAccountRedisCloud,
-  setIsAutodiscoverySSO,
+  setSSOFlow,
+  setIsRecommendedSettingsSSO,
   fetchSubscriptionsRedisCloud,
   fetchAccountRedisCloud,
   loadInstancesRedisCloud,
@@ -559,20 +560,42 @@ describe('cloud slice', () => {
     })
   })
 
-  describe('setIsAutodiscoverySSO', () => {
-    it('should properly set isAutodiscoverySSO', () => {
+  describe('setSSOFlow', () => {
+    it('should properly set setSSOFlow', () => {
       // Arrange
-      const data = true
+      const data = 'import'
       const state = {
         ...initialState,
-        isAutodiscoverySSO: true,
+        ssoFlow: 'import',
       }
 
       // Act
       const nextState = reducer(
         initialState,
-        setIsAutodiscoverySSO(data)
+        setSSOFlow(data)
       )
+
+      // Assert
+      const rootState = Object.assign(initialStateDefault, {
+        connections: {
+          cloud: nextState,
+        },
+      })
+      expect(cloudSelector(rootState)).toEqual(state)
+    })
+  })
+
+  describe('setIsRecommendedSettingsSSO', () => {
+    it('should properly set state', () => {
+      // Arrange
+      const data = true
+      const state = {
+        ...initialState,
+        isRecommendedSettings: true,
+      }
+
+      // Act
+      const nextState = reducer(initialState, setIsRecommendedSettingsSSO(data))
 
       // Assert
       const rootState = Object.assign(initialStateDefault, {

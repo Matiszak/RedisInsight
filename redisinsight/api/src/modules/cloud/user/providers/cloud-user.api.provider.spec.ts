@@ -8,9 +8,11 @@ import {
   mockCloudApiUser,
   mockCloudCapiAccount,
   mockCloudSession,
+  mockCloudSessionService,
 } from 'src/__mocks__';
 import { CloudApiUnauthorizedException } from 'src/modules/cloud/common/exceptions';
 import { CloudUserApiProvider } from 'src/modules/cloud/user/providers/cloud-user.api.provider';
+import { CloudSessionService } from 'src/modules/cloud/session/cloud-session.service';
 
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 jest.mock('axios');
@@ -23,6 +25,10 @@ describe('CloudUserApiProvider', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CloudUserApiProvider,
+        {
+          provide: CloudSessionService,
+          useFactory: mockCloudSessionService,
+        },
       ],
     }).compile();
 
@@ -58,7 +64,9 @@ describe('CloudUserApiProvider', () => {
       mockedAxios.post.mockResolvedValue(response);
 
       expect(await service.getApiSessionId(mockCloudSession)).toEqual(mockCloudApiAuthDto.apiSessionId);
-      expect(mockedAxios.post).toHaveBeenCalledWith('login', {}, {
+      expect(mockedAxios.post).toHaveBeenCalledWith('login', {
+        auth_mode: mockCloudSession.idpType,
+      }, {
         ...mockCloudApiHeaders,
       });
     });
@@ -75,6 +83,7 @@ describe('CloudUserApiProvider', () => {
       )).toEqual(mockCloudApiAuthDto.apiSessionId);
 
       expect(mockedAxios.post).toHaveBeenCalledWith('login', {
+        auth_mode: mockCloudSession.idpType,
         utm_source: 's',
         utm_medium: 'm',
         utm_campaign: 'c',
@@ -95,6 +104,7 @@ describe('CloudUserApiProvider', () => {
       )).toEqual(mockCloudApiAuthDto.apiSessionId);
 
       expect(mockedAxios.post).toHaveBeenCalledWith('login', {
+        auth_mode: mockCloudSession.idpType,
         utm_medium: 'm',
       }, {
         ...mockCloudApiHeaders,

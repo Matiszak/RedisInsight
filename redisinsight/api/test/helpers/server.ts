@@ -5,6 +5,9 @@ import { constants } from './constants';
 import { connect, Socket } from "socket.io-client";
 import * as express from 'express';
 import { serverConfig } from './test';
+import { SessionMetadataAdapter } from 'src/modules/auth/session-metadata/adapters/session-metadata.adapter';
+import * as process from 'process';
+import { sign } from 'jsonwebtoken';
 
 /**
  * TEST_BE_SERVER - url to already running API that we want to test
@@ -12,6 +15,9 @@ import { serverConfig } from './test';
  */
 export let server = process.env.TEST_BE_SERVER;
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; // lgtm[js/disabling-certificate-validation]
+process.env.MOCK_AKEY = sign({exp: Date.now() + 360_000 }, 'test');
+process.env.MOCK_RKEY = 'rk_asdasdasd';
+process.env.MOCK_IDP_TYPE = 'google';
 
 export let baseUrl = server;
 
@@ -41,6 +47,7 @@ export const getServer = async () => {
     app.use(bodyParser.json({ limit: '512mb' }));
     app.use(bodyParser.urlencoded({ limit: '512mb', extended: true }));
     app.use('/static', express.static(serverConfig.get('dir_path').staticDir))
+    app.useWebSocketAdapter(new SessionMetadataAdapter(app));
 
     await app.init();
     server = await app.getHttpServer();

@@ -1,4 +1,6 @@
 .container {
+  margin: 0;
+
   @media only screen and (max-width: 1124px) {
     .modules {
       margin-left: 0;
@@ -13,7 +15,8 @@
 }
 
 .itemContainer {
-  height: 58px;
+  height: 42px;
+  border-radius: 8px;
   align-items: center;
   justify-content: center;
   margin-left: 6px;
@@ -25,30 +28,27 @@
 }
 
 .overviewItem {
-  padding: 6px 20px;
-  min-width: 116px;
+  min-width: 58px;
+
+  padding: 0 14px;
   color: var(--euiTextSubduedColor);
-  border-right: 1px solid var(--separatorColor);
 
-  @media only screen and (max-width: 1024px) {
-    padding: 6px 10px;
-    min-width: 96px;
-  }
-
-  @media only screen and (max-width: 1124px) {
+  &:not(:last-child) {
     border-right: 1px solid var(--separatorColor);
   }
 }
+
 .icon {
+  color: var(--euiColorMediumShade);
   margin-right: 6px;
   width: auto !important;
-  height: 18px !important;
-  max-width: 22px;
+  height: 14px !important;
+  max-width: 18px;
 }
 
 .overviewItemContent {
-  font-size: 16px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 400;
 }
 
 .tooltip {
@@ -61,6 +61,7 @@
   &:last-child {
     margin-bottom: 0;
   }
+
   .moreInfoOverviewIcon {
     margin-right: 8px;
     width: auto !important;
@@ -93,14 +94,17 @@
   .redistackLogoIcon {
     width: 24px;
     height: 24px;
+
     @media only screen and (min-width: 1124px) {
       display: none;
     }
   }
+
   .redistackIcon {
     display: none;
     width: 114px;
     height: 18px;
+
     @media only screen and (min-width: 1124px) {
       display: block;
     }
@@ -113,5 +117,29 @@
 
   @media only screen and (min-width: 1124px) {
     display: none !important;
+  }
+}
+
+.autoRefresh {
+  padding-top: 0;
+  padding-bottom: 0;
+  margin-left: -2px; /* adjust for whitespace in the icon */
+
+  :global(.popover-without-top-tail) {
+    margin-top: 0;
+  }
+}
+
+.upgradeBtnItem {
+  border-right: none;
+  height: 28px;
+}
+
+.upgradeBtn {
+  padding: 0;
+  margin-top: 0;
+
+  :global(.euiButton__text) {
+    font: normal normal 400 14px/18px Graphik, sans-serif !important;
   }
 }

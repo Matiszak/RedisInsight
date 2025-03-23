@@ -1,29 +1,31 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import IORedis from 'ioredis';
 import {
   mockCommonClientMetadata,
-  mockDatabaseConnectionService,
-  mockDatabaseInfoProvider, mockDatabaseOverview, mockDatabaseOverviewProvider,
+  mockDatabaseClientFactory,
+  mockDatabaseInfoProvider,
+  mockDatabaseOverview,
+  mockDatabaseOverviewProvider,
+  mockDatabaseOverviewCurrentKeyspace,
   mockDatabaseRecommendationService,
   mockDatabaseService,
+  mockDBSize,
   mockRedisGeneralInfo,
+  mockSessionMetadata,
+  mockStandaloneRedisClient,
   MockType,
 } from 'src/__mocks__';
-import { DatabaseInfoProvider } from 'src/modules/database/providers/database-info.provider';
-import { DatabaseConnectionService } from 'src/modules/database/database-connection.service';
 import { DatabaseInfoService } from 'src/modules/database/database-info.service';
 import { DatabaseOverviewProvider } from 'src/modules/database/providers/database-overview.provider';
 import { DatabaseRecommendationService } from 'src/modules/database-recommendation/database-recommendation.service';
 import { RECOMMENDATION_NAMES } from 'src/constants';
+import { DatabaseClientFactory } from 'src/modules/database/providers/database.client.factory';
+import { DatabaseInfoProvider } from 'src/modules/database/providers/database-info.provider';
 import { DatabaseService } from './database.service';
 
-const nodeClient = Object.create(IORedis.prototype);
-nodeClient.isCluster = false;
-nodeClient.disconnect = () => {};
-
-describe('DatabaseConnectionService', () => {
+describe('DatabaseInfoService', () => {
+  const client = mockStandaloneRedisClient;
   let service: DatabaseInfoService;
-  let databaseConnectionService: MockType<DatabaseConnectionService>;
+  let databaseClientFactory: MockType<DatabaseClientFactory>;
   let recommendationService: MockType<DatabaseRecommendationService>;
   let databaseService: MockType<DatabaseService>;
 
@@ -34,8 +36,8 @@ describe('DatabaseConnectionService', () => {
       providers: [
         DatabaseInfoService,
         {
-          provide: DatabaseConnectionService,
-          useFactory: mockDatabaseConnectionService,
+          provide: DatabaseClientFactory,
+          useFactory: mockDatabaseClientFactory,
         },
         {
           provide: DatabaseOverviewProvider,
@@ -57,7 +59,7 @@ describe('DatabaseConnectionService', () => {
     }).compile();
 
     service = await module.get(DatabaseInfoService);
-    databaseConnectionService = await module.get(DatabaseConnectionService);
+    databaseClientFactory = await module.get(DatabaseClientFactory);
     recommendationService = module.get(DatabaseRecommendationService);
     databaseService = module.get(DatabaseService);
   });
@@ -70,7 +72,15 @@ describe('DatabaseConnectionService', () => {
 
   describe('getOverview', () => {
     it('should create client and get overview', async () => {
-      expect(await service.getOverview(mockCommonClientMetadata)).toEqual(mockDatabaseOverview);
+      expect(
+        await service.getOverview(mockCommonClientMetadata, mockDatabaseOverviewCurrentKeyspace),
+      ).toEqual(mockDatabaseOverview);
+    });
+  });
+
+  describe('getDBSize', () => {
+    it('should create client and gets db size', async () => {
+      expect(await service.getDBSize(mockCommonClientMetadata)).toEqual(mockDBSize);
     });
   });
 
@@ -79,20 +89,20 @@ describe('DatabaseConnectionService', () => {
       expect(await service.getDatabaseIndex(mockCommonClientMetadata, 0)).toEqual(undefined);
     });
     it('Should throw Error when error during creating a client', async () => {
-      databaseConnectionService.createClient.mockRejectedValueOnce(new Error());
+      databaseClientFactory.createClient.mockRejectedValueOnce(new Error());
       await expect(service.getDatabaseIndex(mockCommonClientMetadata, 0)).rejects.toThrow(Error);
     });
     it('getDatabaseIndex should call databaseService.get() if previous clientMetadata.db is Undefined', async () => {
       const db = 2;
-      databaseConnectionService.createClient.mockResolvedValueOnce(nodeClient);
+      databaseClientFactory.createClient.mockResolvedValueOnce(client);
       await service.getDatabaseIndex(mockCommonClientMetadata, db);
 
-      expect(databaseService.get).toBeCalledWith(mockCommonClientMetadata.databaseId);
+      expect(databaseService.get).toBeCalledWith(mockSessionMetadata, mockCommonClientMetadata.databaseId);
     });
     describe('recommendationService', () => {
       it('getDatabaseIndex should call recommendationService', async () => {
         const db = 2;
-        databaseConnectionService.createClient.mockResolvedValueOnce(nodeClient);
+        databaseClientFactory.createClient.mockResolvedValueOnce(client);
         await service.getDatabaseIndex(mockCommonClientMetadata, db);
 
         expect(recommendationService.check).toBeCalledWith(
@@ -102,11 +112,11 @@ describe('DatabaseConnectionService', () => {
         );
       });
       it('getDatabaseIndex should not call recommendationService if Error exists', async () => {
-        databaseConnectionService.createClient.mockRejectedValueOnce(new Error());
+        databaseClientFactory.createClient.mockRejectedValueOnce(new Error());
         await expect(service.getDatabaseIndex(mockCommonClientMetadata, 2)).rejects.toThrow(Error);
         await expect(recommendationService.check).toBeCalledTimes(0);
         await expect(databaseService.get).toBeCalledTimes(1);
-        await expect(databaseService.get).toBeCalledWith(mockCommonClientMetadata.databaseId);
+        await expect(databaseService.get).toBeCalledWith(mockSessionMetadata, mockCommonClientMetadata.databaseId);
       });
     });
   });

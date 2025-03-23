@@ -1,6 +1,7 @@
 import { Nullable } from 'uiSrc/utils'
 import { Instance } from 'uiSrc/slices/interfaces/instances'
 
+import { OAuthProvider } from 'uiSrc/components/oauth/oauth-select-plan/constants'
 import { CloudJobInfo, CloudJobStatus } from 'apiSrc/modules/cloud/job/models'
 import { CloudUser } from 'apiSrc/modules/cloud/user/models'
 import { CloudSubscriptionPlanResponse } from 'apiSrc/modules/cloud/subscription/dto'
@@ -16,6 +17,7 @@ export interface StateAppOAuth {
   source: Nullable<OAuthSocialSource>
   job: Nullable<CloudJobInfoState>
   user: {
+    initialLoading: boolean
     error: string
     loading: boolean
     data: Nullable<CloudUser>
@@ -27,7 +29,6 @@ export interface StateAppOAuth {
     loading: boolean
   }
   isOpenSocialDialog: boolean
-  isOpenSignInDialog: boolean
   isOpenSelectAccountDialog: boolean
   showProgress: boolean
   capiKeys: {
@@ -35,6 +36,13 @@ export interface StateAppOAuth {
     data: Nullable<CloudCapiKey[]>
   }
   agreement: boolean
+}
+
+export interface CloudImportDatabaseResources {
+  subscriptionId: number,
+  databaseId?: number
+  region: string
+  provider?: string
 }
 
 export interface Region {
@@ -56,8 +64,16 @@ export interface CloudUserFreeDbState {
   data: Nullable<Instance>
 }
 
+export interface CloudSuccessResult {
+  resourceId: string
+  provider?: OAuthProvider
+  region?: string
+}
+
 export enum OAuthSocialSource {
+  Browser = 'browser',
   ListOfDatabases = 'list of databases',
+  DatabaseConnectionList = 'database connection list',
   WelcomeScreen = 'welcome screen',
   BrowserContentMenu = 'browser content menu',
   BrowserFiltering = 'browser filtering',
@@ -70,9 +86,27 @@ export enum OAuthSocialSource {
   Autodiscovery = 'autodiscovery',
   SettingsPage = 'settings',
   ConfirmationMessage = 'confirmation message',
-  TriggersAndFunctions = 'triggers_and_functions',
-  'triggers and functions' = 'workbench triggers_and_functions',
-  Tutorials = 'tutorials'
+  Workbench = 'workbench',
+  Tutorials = 'tutorials',
+  EmptyDatabasesList = 'empty_db_list',
+  DatabasesList = 'db_list',
+  DiscoveryForm = 'discovery form',
+  UserProfile = 'user profile',
+  AiChat = 'ai chat',
+  NavigationMenu = 'navigation menu',
+  AddDbForm = 'add db form',
+}
+
+export enum OAuthSocialAction {
+  Create = 'create',
+  Import = 'import',
+  SignIn = 'signIn'
+}
+
+export enum OAuthStrategy {
+  Google = 'google',
+  GitHub = 'github',
+  SSO = 'sso'
 }
 
 export enum CloudSsoUtmCampaign {
@@ -83,6 +117,9 @@ export enum CloudSsoUtmCampaign {
   BrowserOverview = 'redisinsight_browser_overview',
   BrowserFilter = 'browser_filter',
   Tutorial = 'tutorial',
-  TriggersAndFunctions = 'redisinsight_triggers_and_functions',
+  AutoDiscovery = 'auto_discovery',
+  Copilot = 'copilot',
+  UserProfile = 'user_account',
+  Settings = 'settings',
   Unknown = 'other',
 }

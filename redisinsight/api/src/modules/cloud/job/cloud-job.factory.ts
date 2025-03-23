@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import {
   CloudJob,
   CreateFreeSubscriptionAndDatabaseCloudJob,
-  ImportFreeDatabaseCloudJob
+  ImportFreeDatabaseCloudJob,
 } from 'src/modules/cloud/job/jobs';
 import { CloudJobName } from 'src/modules/cloud/job/constants';
 import { CreateFreeDatabaseCloudJob } from 'src/modules/cloud/job/jobs/create-free-database.cloud-job';
@@ -16,6 +16,9 @@ import { DatabaseService } from 'src/modules/database/database.service';
 import { CloudDatabaseAnalytics } from 'src/modules/cloud/database/cloud-database.analytics';
 import { CloudRequestUtm } from 'src/modules/cloud/common/models';
 import { CloudCapiKeyService } from 'src/modules/cloud/capi-key/cloud-capi-key.service';
+import { CloudSubscriptionApiService } from 'src/modules/cloud/subscription/cloud-subscription.api.service';
+import { BulkImportService } from 'src/modules/bulk-actions/bulk-import.service';
+import { DatabaseInfoService } from 'src/modules/database/database-info.service';
 
 @Injectable()
 export class CloudJobFactory {
@@ -25,7 +28,10 @@ export class CloudJobFactory {
     private readonly cloudTaskCapiService: CloudTaskCapiService,
     private readonly cloudDatabaseAnalytics: CloudDatabaseAnalytics,
     private readonly databaseService: DatabaseService,
+    private readonly databaseInfoService: DatabaseInfoService,
+    private readonly bulkImportService: BulkImportService,
     private readonly cloudCapiKeyService: CloudCapiKeyService,
+    private readonly cloudSubscriptionApiService: CloudSubscriptionApiService,
   ) {}
 
   async create(
@@ -52,7 +58,10 @@ export class CloudJobFactory {
             cloudTaskCapiService: this.cloudTaskCapiService,
             cloudDatabaseAnalytics: this.cloudDatabaseAnalytics,
             databaseService: this.databaseService,
+            databaseInfoService: this.databaseInfoService,
+            bulkImportService: this.bulkImportService,
             cloudCapiKeyService: this.cloudCapiKeyService,
+            cloudSubscriptionApiService: this.cloudSubscriptionApiService,
           },
         );
       case CloudJobName.CreateFreeDatabase:
@@ -68,6 +77,8 @@ export class CloudJobFactory {
             cloudTaskCapiService: this.cloudTaskCapiService,
             cloudDatabaseAnalytics: this.cloudDatabaseAnalytics,
             databaseService: this.databaseService,
+            databaseInfoService: this.databaseInfoService,
+            bulkImportService: this.bulkImportService,
             cloudCapiKeyService: this.cloudCapiKeyService,
           },
         );

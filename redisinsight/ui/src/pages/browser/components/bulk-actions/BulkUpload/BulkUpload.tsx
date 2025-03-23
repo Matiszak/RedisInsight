@@ -20,7 +20,8 @@ import {
   bulkActionsUploadSelector,
   bulkActionsUploadSummarySelector,
   bulkUploadDataAction,
-  setBulkUploadStartAgain
+  setBulkUploadStartAgain,
+  uploadController
 } from 'uiSrc/slices/browser/bulkActions'
 
 import BulkActionsInfo from 'uiSrc/pages/browser/components/bulk-actions/BulkActionsInfo'
@@ -28,13 +29,14 @@ import BulkActionSummary from 'uiSrc/pages/browser/components/bulk-actions/BulkA
 
 import { sendEventTelemetry, TelemetryEvent } from 'uiSrc/telemetry'
 import { isProcessedBulkAction } from 'uiSrc/pages/browser/components/bulk-actions/utils'
+import { UploadWarning } from 'uiSrc/components'
 import styles from './styles.module.scss'
 
 export interface Props {
   onCancel: () => void
 }
 
-const MAX_MB_FILE = 100
+const MAX_MB_FILE = 3_000
 const MAX_FILE_SIZE = MAX_MB_FILE * 1024 * 1024
 
 const BulkUpload = (props: Props) => {
@@ -88,6 +90,11 @@ const BulkUpload = (props: Props) => {
     }
   }
 
+  const handleClickCancel = () => {
+    uploadController?.abort()
+    onCancel?.()
+  }
+
   return (
     <div className={styles.container} data-testid="bulk-upload-container">
       {!isCompleted ? (
@@ -124,6 +131,7 @@ const BulkUpload = (props: Props) => {
               File should not exceed {MAX_MB_FILE} MB
             </EuiTextColor>
           )}
+          <UploadWarning />
           <EuiSpacer size="l" />
         </div>
       ) : (
@@ -147,7 +155,7 @@ const BulkUpload = (props: Props) => {
       <div className={styles.footer}>
         <EuiButton
           color="secondary"
-          onClick={onCancel}
+          onClick={handleClickCancel}
           className={styles.cancelBtn}
           data-testid="bulk-action-cancel-btn"
         >

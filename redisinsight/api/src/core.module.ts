@@ -13,17 +13,21 @@ import { FeatureModule } from 'src/modules/feature/feature.module';
 import { AuthModule } from 'src/modules/auth/auth.module';
 import { SessionModule } from 'src/modules/session/session.module';
 import { ServerModule } from 'src/modules/server/server.module';
+import { ConstantsModule } from 'src/modules/constants/constants.module';
+import { DatabaseDiscoveryModule } from 'src/modules/database-discovery/database-discovery.module';
 
 @Global()
 @Module({
   imports: [
+    ConstantsModule.register(),
     EventEmitterModule.forRoot(),
+    DatabaseDiscoveryModule,
     AnalyticsModule,
     EncryptionModule.register(),
     SettingsModule.register(),
     CertificateModule.register(),
     DatabaseModule.register(),
-    RedisModule,
+    RedisModule.register(),
     DatabaseRecommendationModule.register(),
     SshModule,
     NestjsFormDataModule,
@@ -33,7 +37,9 @@ import { ServerModule } from 'src/modules/server/server.module';
     ServerModule.register(),
   ],
   exports: [
+    ConstantsModule,
     EncryptionModule,
+    DatabaseDiscoveryModule,
     SettingsModule,
     CertificateModule,
     DatabaseModule,

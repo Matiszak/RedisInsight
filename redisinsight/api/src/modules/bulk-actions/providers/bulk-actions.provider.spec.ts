@@ -1,20 +1,19 @@
-import IORedis from 'ioredis';
 import * as MockedSocket from 'socket.io-mock';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
-  mockDatabaseConnectionService,
-  MockType,
+  mockBulkActionsAnalytics,
+  mockDatabaseClientFactory,
+  mockSessionMetadata,
 } from 'src/__mocks__';
 import { BulkActionsProvider } from 'src/modules/bulk-actions/providers/bulk-actions.provider';
-import { RedisService } from 'src/modules/redis/redis.service';
-import { RedisDataType } from 'src/modules/browser/dto';
+import { RedisDataType } from 'src/modules/browser/keys/dto';
 import { BulkActionType } from 'src/modules/bulk-actions/constants';
 import { CreateBulkActionDto } from 'src/modules/bulk-actions/dto/create-bulk-action.dto';
 import { BulkActionFilter } from 'src/modules/bulk-actions/models/bulk-action-filter';
 import { BulkAction } from 'src/modules/bulk-actions/models/bulk-action';
-import { NotFoundException } from '@nestjs/common';
-import { DatabaseConnectionService } from 'src/modules/database/database-connection.service';
-import { BulkActionsAnalyticsService } from 'src/modules/bulk-actions/bulk-actions-analytics.service';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BulkActionsAnalytics } from 'src/modules/bulk-actions/bulk-actions.analytics';
+import { DatabaseClientFactory } from 'src/modules/database/providers/database.client.factory';
 
 export const mockSocket1 = new MockedSocket();
 mockSocket1.id = '1';
@@ -23,10 +22,6 @@ mockSocket1['emit'] = jest.fn();
 export const mockSocket2 = new MockedSocket();
 mockSocket2.id = '2';
 mockSocket2['emit'] = jest.fn();
-
-const nodeClient = Object.create(IORedis.prototype);
-nodeClient.sendCommand = jest.fn();
-nodeClient.options = { db: 0 };
 
 const mockBulkActionFilter = Object.assign(new BulkActionFilter(), {
   count: 10_000,
@@ -43,53 +38,36 @@ const mockCreateBulkActionDto = Object.assign(new CreateBulkActionDto(), {
 
 describe('BulkActionsProvider', () => {
   let service: BulkActionsProvider;
-  let redisService: MockType<RedisService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BulkActionsProvider,
         {
-          provide: RedisService,
-          useFactory: () => ({
-            getClientInstance: jest.fn(),
-            isClientConnected: jest.fn(),
-          }),
+          provide: DatabaseClientFactory,
+          useFactory: mockDatabaseClientFactory,
         },
         {
-          provide: DatabaseConnectionService,
-          useFactory: mockDatabaseConnectionService,
-        },
-        {
-          provide: BulkActionsAnalyticsService,
-          useFactory: () => ({
-            sendActionStarted: jest.fn(),
-            sendActionStopped: jest.fn(),
-            sendActionSucceed: jest.fn(),
-            sendActionFailed: jest.fn(),
-          }),
+          provide: BulkActionsAnalytics,
+          useFactory: mockBulkActionsAnalytics,
         },
       ],
     }).compile();
 
     service = module.get(BulkActionsProvider);
-    redisService = module.get(RedisService);
-
-    redisService.getClientInstance.mockReturnValue({ client: nodeClient });
-    redisService.isClientConnected.mockReturnValue(true);
   });
 
   describe('create', () => {
     it('should create only once with the same id', async () => {
       expect(service['bulkActions'].size).toEqual(0);
 
-      const bulkAction = await service.create(mockCreateBulkActionDto, mockSocket1);
+      const bulkAction = await service.create(mockSessionMetadata, mockCreateBulkActionDto, mockSocket1);
 
       expect(bulkAction).toBeInstanceOf(BulkAction);
       expect(service['bulkActions'].size).toEqual(1);
 
       try {
-        await service.create(mockCreateBulkActionDto, mockSocket1);
+        await service.create(mockSessionMetadata, mockCreateBulkActionDto, mockSocket1);
         fail();
       } catch (e) {
         expect(e.message).toEqual('You already have bulk action with such id');
@@ -97,15 +75,26 @@ describe('BulkActionsProvider', () => {
 
       expect(service['bulkActions'].size).toEqual(1);
 
-      await service.create({ ...mockCreateBulkActionDto, id: 'new one' }, mockSocket1);
+      await service.create(mockSessionMetadata, { ...mockCreateBulkActionDto, id: 'new one' }, mockSocket1);
 
       expect(service['bulkActions'].size).toEqual(2);
+    });
+    it('should fail when unsupported runner class', async () => {
+      try {
+        await service.create(mockSessionMetadata, {
+          ...mockCreateBulkActionDto,
+          type: undefined,
+        }, mockSocket1);
+        fail();
+      } catch (e) {
+        expect(e).toBeInstanceOf(BadRequestException);
+      }
     });
   });
   describe('get', () => {
     it('should get by id', async () => {
-      const bulkAction = await service.create(mockCreateBulkActionDto, mockSocket1);
-      await service.create({ ...mockCreateBulkActionDto, id: 'new one' }, mockSocket1);
+      const bulkAction = await service.create(mockSessionMetadata, mockCreateBulkActionDto, mockSocket1);
+      await service.create(mockSessionMetadata, { ...mockCreateBulkActionDto, id: 'new one' }, mockSocket1);
 
       expect(service['bulkActions'].size).toEqual(2);
 
@@ -125,8 +114,8 @@ describe('BulkActionsProvider', () => {
   });
   describe('abort', () => {
     it('should abort by id and remove', async () => {
-      const bulkAction = await service.create(mockCreateBulkActionDto, mockSocket1);
-      await service.create({ ...mockCreateBulkActionDto, id: 'new one' }, mockSocket1);
+      const bulkAction = await service.create(mockSessionMetadata, mockCreateBulkActionDto, mockSocket1);
+      await service.create(mockSessionMetadata, { ...mockCreateBulkActionDto, id: 'new one' }, mockSocket1);
 
       expect(service['bulkActions'].size).toEqual(2);
 
@@ -148,9 +137,9 @@ describe('BulkActionsProvider', () => {
   });
   describe('abortUsersBulkActions', () => {
     it('should abort all users bulk actions', async () => {
-      await service.create(mockCreateBulkActionDto, mockSocket1);
-      await service.create({ ...mockCreateBulkActionDto, id: 'new one' }, mockSocket1);
-      await service.create({ ...mockCreateBulkActionDto, id: 'new one 2' }, mockSocket2);
+      await service.create(mockSessionMetadata, mockCreateBulkActionDto, mockSocket1);
+      await service.create(mockSessionMetadata, { ...mockCreateBulkActionDto, id: 'new one' }, mockSocket1);
+      await service.create(mockSessionMetadata, { ...mockCreateBulkActionDto, id: 'new one 2' }, mockSocket2);
 
       expect(service['bulkActions'].size).toEqual(3);
 

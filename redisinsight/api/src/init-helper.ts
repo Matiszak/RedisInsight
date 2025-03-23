@@ -28,12 +28,41 @@ export const migrateHomeFolder = async () => {
       await Promise.all([
         'redisinsight.db',
         'plugins',
+        'custom-tutorials',
       ].map((target) => copySource(
         join(PATH_CONFIG.prevHomedir, target),
         join(PATH_CONFIG.homedir, target),
       )));
     }
+
+    return true
   } catch (e) {
     // continue initialization even without migration
+    return false
+  }
+};
+
+/**
+ * Remove old folders
+ */
+export const removeOldFolders = async () => {
+  try {
+    // remove old folders
+    await PATH_CONFIG.oldFolders?.map(removeFolder)
+  } catch (e) {
+    // continue initialization even without removing
+  }
+};
+
+/**
+ * Remove a folder
+ */
+export const removeFolder = async (path: string) => {
+  try {
+    if (await fs.pathExists(path)) {
+      await fs.rm(path, { recursive: true, force: true });
+    }
+  } catch (e) {
+    // continue initialization even without removing
   }
 };

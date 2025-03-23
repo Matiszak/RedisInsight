@@ -3,13 +3,14 @@
  * This module abstracts the exact service/framework used for tracking usage.
  */
 import isGlob from 'is-glob'
-import { cloneDeep } from 'lodash'
-import * as jsonpath from 'jsonpath'
-import { isRedisearchAvailable, isTriggeredAndFunctionsAvailable } from 'uiSrc/utils'
+import { cloneDeep, get } from 'lodash'
+import jsonpath from 'jsonpath'
+import { Maybe, isRedisearchAvailable } from 'uiSrc/utils'
 import { ApiEndpoints, KeyTypes } from 'uiSrc/constants'
 import { KeyViewType } from 'uiSrc/slices/interfaces/keys'
 import { IModuleSummary, ITelemetrySendEvent, ITelemetrySendPageView, RedisModulesKeyType } from 'uiSrc/telemetry/interfaces'
 import { apiService } from 'uiSrc/services'
+import { store } from 'uiSrc/slices/store'
 import { AdditionalRedisModule } from 'apiSrc/modules/database/models/additional.redis.module'
 import {
   IRedisModulesSummary,
@@ -19,25 +20,77 @@ import {
 import { TelemetryEvent } from './events'
 import { checkIsAnalyticsGranted } from './checkAnalytics'
 
-const sendEventTelemetry = async ({ event, eventData = {} }: ITelemetrySendEvent) => {
+export const getProviderData = (dbId: string): {
+  provider: Maybe<string>,
+  serverName: Maybe<string>
+} => {
+  let provider
+  let serverName
+  const instance = get(store.getState(), 'connections.instances.connectedInstance')
+  if (instance.id === dbId) {
+    provider = instance?.provider
+    const instanceOverview = get(store.getState(), 'connections.instances.instanceOverview')
+    serverName = instanceOverview?.serverName || undefined
+  }
+  return { provider, serverName }
+}
+
+const FREE_DB_IDENTIFIER_TELEMETRY_EVENTS = [
+  TelemetryEvent.INSIGHTS_PANEL_OPENED,
+  TelemetryEvent.INSIGHTS_PANEL_CLOSED,
+  TelemetryEvent.EXPLORE_PANEL_TUTORIAL_OPENED,
+  TelemetryEvent.EXPLORE_PANEL_COMMAND_COPIED,
+  TelemetryEvent.EXPLORE_PANEL_COMMAND_RUN_CLICKED,
+  TelemetryEvent.EXPLORE_PANEL_LINK_CLICKED,
+]
+
+const getFreeDbFlag = (
+  event: TelemetryEvent,
+  freeDbEvents: TelemetryEvent[] = FREE_DB_IDENTIFIER_TELEMETRY_EVENTS
+): { isFree?: boolean } => {
+  if (freeDbEvents.includes(event)) {
+    const state = get(store.getState(), 'connections.instances.connectedInstance')
+    return state ? { isFree: state.isFreeDb } : {}
+  }
+
+  return {}
+}
+
+const TELEMETRY_EMPTY_VALUE = 'none'
+
+const sendEventTelemetry = async ({ event, eventData = {}, traits = {} }: ITelemetrySendEvent) => {
+  let providerData
   try {
     const isAnalyticsGranted = checkIsAnalyticsGranted()
     if (!isAnalyticsGranted) {
       return
     }
-    await apiService.post(`${ApiEndpoints.ANALYTICS_SEND_EVENT}`, { event, eventData })
+
+    if (eventData.databaseId) {
+      providerData = getProviderData(eventData.databaseId)
+    }
+
+    const freeDbIdentifier = getFreeDbFlag(event)
+
+    await apiService.post(`${ApiEndpoints.ANALYTICS_SEND_EVENT}`,
+      { event, eventData: { ...providerData, ...eventData, ...freeDbIdentifier }, traits })
   } catch (e) {
     // continue regardless of error
   }
 }
 
-const sendPageViewTelemetry = async ({ name }: ITelemetrySendPageView) => {
+const sendPageViewTelemetry = async ({ name, eventData = {} }: ITelemetrySendPageView) => {
   try {
+    let providerData
     const isAnalyticsGranted = checkIsAnalyticsGranted()
     if (!isAnalyticsGranted) {
       return
     }
-    await apiService.post(`${ApiEndpoints.ANALYTICS_SEND_PAGE}`, { event: name })
+    if (eventData.databaseId) {
+      providerData = getProviderData(eventData.databaseId)
+    }
+    await apiService.post(`${ApiEndpoints.ANALYTICS_SEND_PAGE}`,
+      { event: name, eventData: { ...providerData, ...eventData } })
   } catch (e) {
     // continue regardless of error
   }
@@ -60,16 +113,14 @@ const getBasedOnViewTypeEvent = (
 
 const getJsonPathLevel = (path: string): string => {
   try {
-    if (path === '.') {
+    if (path === '$') {
       return 'root'
     }
     const levelsLength = jsonpath.parse(
-      `$${path.startsWith('.') ? '' : '..'}${path}`,
+      `$${path.startsWith('$') ? '.' : '..'}${path}`,
     ).length
-    if (levelsLength === 1) {
-      return 'root'
-    }
-    return `${levelsLength - 2}`
+
+    return levelsLength === 2 ? 'root' : `${levelsLength - 2}`
   } catch (e) {
     return 'root'
   }
@@ -104,7 +155,7 @@ const getAdditionalAddedEventData = (endpoint: ApiEndpoints, data: any) => {
     case ApiEndpoints.LIST:
       return {
         keyType: KeyTypes.List,
-        length: 1,
+        length: data.elements?.length,
         TTL: data.expire || -1
       }
     case ApiEndpoints.REJSON:
@@ -148,7 +199,6 @@ const DEFAULT_SUMMARY: IRedisModulesSummary = Object.freeze(
     RedisBloom: { loaded: false },
     RedisJSON: { loaded: false },
     RedisTimeSeries: { loaded: false },
-    'Triggers and Functions': { loaded: false },
     customModules: [],
   },
 )
@@ -181,12 +231,6 @@ const getRedisModulesSummary = (modules: AdditionalRedisModule[] = []): IRedisMo
         return
       }
 
-      if (isTriggeredAndFunctionsAvailable([module])) {
-        const triggeredAndFunctionsName = getEnumKeyBValue(RedisModules, RedisModules['Triggers and Functions'])
-        summary[triggeredAndFunctionsName as RedisModulesKeyType] = getModuleSummaryToSent(module)
-        return
-      }
-
       summary.customModules.push(module)
     }))
   } catch (e) {
@@ -196,11 +240,13 @@ const getRedisModulesSummary = (modules: AdditionalRedisModule[] = []): IRedisMo
 }
 
 export {
+  TELEMETRY_EMPTY_VALUE,
   sendEventTelemetry,
   sendPageViewTelemetry,
   getBasedOnViewTypeEvent,
   getJsonPathLevel,
   getAdditionalAddedEventData,
   getMatchType,
-  getRedisModulesSummary
+  getRedisModulesSummary,
+  getFreeDbFlag,
 }

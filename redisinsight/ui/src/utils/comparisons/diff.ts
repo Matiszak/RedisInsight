@@ -23,13 +23,13 @@ export const getFormUpdates = (obj1: UnknownObject = {}, obj2: UnknownObject = {
     obj1,
     (result: UnknownObject, value, key) => {
       if (isObject(value)) {
-        const diff = getFormUpdates(value, obj2[key])
+        const diff = getFormUpdates(value, obj2[key] || {})
 
         if (Object.keys(diff).length) {
           result[key] = diff
         }
       } else if (value !== obj2[key] && !(!value && !obj2[key])) {
-        result[key] = value || null
+        result[key] = value ?? null
       }
 
       return result

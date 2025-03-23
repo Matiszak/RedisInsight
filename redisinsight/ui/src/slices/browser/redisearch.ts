@@ -12,8 +12,8 @@ import ApiErrors from 'uiSrc/constants/apiErrors'
 import { sendEventTelemetry, TelemetryEvent } from 'uiSrc/telemetry'
 
 import { SearchHistoryItem } from 'uiSrc/slices/interfaces/keys'
-import { GetKeysWithDetailsResponse } from 'apiSrc/modules/browser/dto'
-import { CreateRedisearchIndexDto, ListRedisearchIndexesResponse } from 'apiSrc/modules/browser/dto/redisearch'
+import { GetKeysWithDetailsResponse } from 'apiSrc/modules/browser/keys/dto'
+import { CreateRedisearchIndexDto, ListRedisearchIndexesResponse } from 'apiSrc/modules/browser/redisearch/dto'
 
 import { AppDispatch, RootState } from '../store'
 import { RedisResponseBuffer, StateRedisearch } from '../interfaces'
@@ -528,6 +528,33 @@ export function deleteRedisearchHistoryAction(
       }
     } catch (_err) {
       dispatch(deleteRediSearchHistoryFailure())
+      onFailed?.()
+    }
+  }
+}
+
+export function fetchRedisearchInfoAction(
+  index: string,
+  onSuccess?: (value: RedisResponseBuffer[]) => void,
+  onFailed?: () => void,
+) {
+  return async (_: AppDispatch, stateInit: () => RootState) => {
+    try {
+      const state = stateInit()
+      const { data, status } = await apiService.post(
+        getUrl(
+          state.connections.instances.connectedInstance?.id,
+          ApiEndpoints.REDISEARCH_INFO
+        ),
+        {
+          index
+        }
+      )
+
+      if (isStatusSuccessful(status)) {
+        onSuccess?.(data)
+      }
+    } catch (_err) {
       onFailed?.()
     }
   }

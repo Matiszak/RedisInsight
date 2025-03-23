@@ -27,7 +27,7 @@ export const GROUP_TYPES_DISPLAY = Object.freeze({
   [KeyTypes.ReJSON]: 'JSON',
   [KeyTypes.JSON]: 'JSON',
   [KeyTypes.Stream]: 'Stream',
-  [ModulesKeyTypes.TimeSeries]: 'TS',
+  [ModulesKeyTypes.TimeSeries]: 'Time Series',
   [CommandGroup.Bitmap]: 'Bitmap',
   [CommandGroup.Cluster]: 'Cluster',
   [CommandGroup.Connection]: 'Connection',
@@ -90,38 +90,6 @@ export type KeyTypesActions = {
   }
 }
 
-export const KEY_TYPES_ACTIONS: KeyTypesActions = Object.freeze({
-  [KeyTypes.Hash]: {
-    addItems: {
-      name: 'Add Fields',
-    },
-  },
-  [KeyTypes.List]: {
-    addItems: {
-      name: 'Add Element',
-    },
-    removeItems: {
-      name: 'Remove Elements',
-    },
-  },
-  [KeyTypes.Set]: {
-    addItems: {
-      name: 'Add Members',
-    },
-  },
-  [KeyTypes.ZSet]: {
-    addItems: {
-      name: 'Add Members',
-    },
-  },
-  [KeyTypes.String]: {
-    editItem: {
-      name: 'Edit Value',
-    },
-  },
-  [KeyTypes.ReJSON]: {}
-})
-
 export const STREAM_ADD_GROUP_VIEW_TYPES = [
   StreamViewType.Groups,
   StreamViewType.Consumers,
@@ -178,7 +146,12 @@ export enum KeyValueFormat {
   JAVA = 'Java serialized',
   Protobuf = 'Protobuf',
   Pickle = 'Pickle',
+  Vector32Bit = 'Vector 32-bit',
+  Vector64Bit = 'Vector 64-bit',
+  DateTime = 'DateTime',
 }
+
+export const DATETIME_FORMATTER_DEFAULT = 'HH:mm:ss d MMM yyyy'
 
 export enum KeyValueCompressor {
   GZIP = 'GZIP',

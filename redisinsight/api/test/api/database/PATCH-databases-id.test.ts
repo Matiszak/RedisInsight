@@ -64,7 +64,9 @@ const baseDatabaseData = {
   password: constants.TEST_REDIS_PASSWORD || undefined,
 }
 
-const responseSchema = databaseSchema.required().strict(true);
+const responseSchema = databaseSchema.keys({
+  isPreSetup: Joi.boolean().allow(null),
+}).required().strict(true);
 
 const mainCheckFn = getMainCheckFn(endpoint);
 
@@ -233,7 +235,7 @@ describe(`PATCH /databases/:id`, () => {
           after: async () => {
             newDatabase = await localDb.getInstanceById(constants.TEST_INSTANCE_ID_3);
             expect(newDatabase).to.contain({
-              ..._.omit(oldDatabase, ['modules', 'provider', 'lastConnection', 'new', 'timeout', 'compressor', 'version']),
+              ..._.omit(oldDatabase, ['modules', 'provider', 'lastConnection', 'new', 'timeout', 'compressor', 'version', 'createdAt']),
               host: constants.TEST_REDIS_HOST,
               port: constants.TEST_REDIS_PORT,
             });
@@ -854,7 +856,7 @@ describe(`PATCH /databases/:id`, () => {
     });
     describe('TLS AUTH', function () {
       requirements('rte.tls', 'rte.tlsAuth');
-      
+
       it('Should update database with partial sshOptions', async () => {
         await validateApiCall({
           endpoint,
@@ -917,6 +919,49 @@ describe(`PATCH /databases/:id`, () => {
         });
 
         expect(await localDb.getInstanceByName(dbName)).to.be.an('object');
+      });
+    });
+  });
+
+  describe('SENTINEL', () => {
+    describe('PASS', function () {
+      requirements('rte.type=SENTINEL', '!rte.tls', 'rte.pass');
+      it('Should update database without full sentinel master information', async () => {
+        const dbName = constants.getRandomString();
+
+        expect(await localDb.getInstanceByName(dbName)).to.eql(null);
+
+        await validateApiCall({
+          endpoint,
+          data: {
+            name: dbName,
+            sentinelMaster: {
+              password: constants.TEST_SENTINEL_MASTER_PASS || null,
+            },
+          },
+        });
+
+        expect(await localDb.getInstanceByName(dbName)).to.be.an('object');
+      });
+
+      it('Should throw Unauthorized error', async () => {
+        const dbName = constants.getRandomString();
+
+        await validateApiCall({
+          endpoint,
+          statusCode: 401,
+          data: {
+            name: dbName,
+            sentinelMaster: {
+              password: 'incorrect password'
+            },
+          },
+          responseBody: {
+            statusCode: 401,
+            message: 'Failed to authenticate, please check the username or password.',
+            error: 'Unauthorized'
+          },
+        });
       });
     });
   });

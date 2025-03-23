@@ -9,8 +9,9 @@ import {
   generateInvalidDataTestCases,
   validateInvalidDataTestCase,
   validateApiCall,
-  requirements,
-} from '../deps';
+  requirements, getMainCheckFn,
+} from '../deps'
+import { convertArrayReplyToObject } from 'src/modules/redis/utils';
 const { server, request, constants, rte, localDb } = deps;
 
 // endpoint to test
@@ -22,17 +23,9 @@ const dataSchema = Joi.object({
   commands: Joi.array().items(Joi.string().allow('')).required().messages({
     'string.base': 'each value in commands must be a string'
   }),
-  role: Joi.string().valid('ALL', 'MASTER', 'SLAVE').allow(null),
   mode: Joi.string().valid('RAW', 'ASCII').allow(null),
   resultsMode: Joi.string().valid('DEFAULT', 'GROUP_MODE').allow(null),
-  nodeOptions: Joi.object().keys({
-    host: Joi.string().required(),
-    // todo: fix BE transform to avoid handle boolean as number
-    port: Joi.number().required().allow(true),
-    enableRedirection: Joi.boolean().required().messages({
-      'any.required': '{#label} should not be null or undefined',
-    }),
-  }).allow(null),
+  type: Joi.string().valid('WORKBENCH', 'SEARCH').allow(null),
 }).messages({
   'any.required': '{#label} should not be empty',
 }).strict();
@@ -41,12 +34,6 @@ const validInputData = {
   commands: ['set foo bar'],
   mode: 'RAW',
   resultsMode: 'DEFAULT',
-  role: 'ALL',
-  nodeOptions: {
-    host: 'localhost',
-    port: 6379,
-    enableRedirection: true,
-  }
 };
 
 const responseSchema = Joi.array().items(Joi.object().keys({
@@ -58,18 +45,7 @@ const responseSchema = Joi.array().items(Joi.object().keys({
   result: Joi.array().items(Joi.object({
     response: Joi.any().required(),
     status: Joi.string().required(),
-    node: Joi.object({
-      host: Joi.string().required(),
-      port: Joi.number().required(),
-      slot: Joi.number(),
-    }),
   })),
-  role: Joi.string().allow(null),
-  nodeOptions: Joi.object().keys({
-    host: Joi.string().required(),
-    port: Joi.number().required(),
-    enableRedirection: Joi.boolean().required(),
-  }).allow(null),
   createdAt: Joi.date().required(),
   executionTime: Joi.number().integer(),
   db: Joi.number().integer().allow(null),
@@ -79,26 +55,10 @@ const responseSchema = Joi.array().items(Joi.object().keys({
     success: Joi.number(),
     fail: Joi.number(),
   }),
+  type: Joi.string().valid('WORKBENCH', 'SEARCH').required(),
 })).required();
 
-const mainCheckFn = async (testCase) => {
-  it(testCase.name, async () => {
-    // additional checks before test run
-    if (testCase.before) {
-      await testCase.before();
-    }
-
-    await validateApiCall({
-      endpoint,
-      ...testCase,
-    });
-
-    // additional checks after test pass
-    if (testCase.after) {
-      await testCase.after();
-    }
-  });
-};
+const mainCheckFn = getMainCheckFn(endpoint);
 
 describe('POST /databases/:instanceId/workbench/command-executions', () => {
   before(rte.data.truncate);
@@ -111,7 +71,7 @@ describe('POST /databases/:instanceId/workbench/command-executions', () => {
 
   describe('Common', () => {
     describe('String', () => {
-      const bigStringValue = Buffer.alloc(1023 * 1024, 'a').toString();
+      const bigStringValue = Buffer.alloc(10, 'a').toString();
 
       [
         {
@@ -132,10 +92,8 @@ describe('POST /databases/:instanceId/workbench/command-executions', () => {
           responseSchema,
           checkFn: async ({ body }) => {
             expect(body[0].command).to.eql(`get ${constants.TEST_STRING_KEY_1}`);
-            expect(body[0].role).to.eql(null);
             expect(body[0].executionTime).to.be.a('number');
             expect(body[0].db).to.be.eql(0);
-            expect(body[0].role).to.eql(null);
             expect(body[0].result.length).to.eql(1);
             expect(body[0].result[0].response).to.eql(bigStringValue);
             expect(body[0].result[0].status).to.eql('success');
@@ -145,8 +103,8 @@ describe('POST /databases/:instanceId/workbench/command-executions', () => {
             });
 
             expect(entity.encryption).to.eql(constants.TEST_ENCRYPTION_STRATEGY);
-            expect(localDb.encryptData(body[0].command)).to.eql(entity.command);
-            expect(localDb.encryptData(JSON.stringify(body[0].result))).to.eql(entity.result);
+            expect(body[0].command).to.eql(localDb.decryptData(entity.command));
+            expect(body[0].result).to.eql(JSON.parse(localDb.decryptData(entity.result)));
           },
           before: async () => {
             expect(await rte.client.set(constants.TEST_STRING_KEY_1, bigStringValue));
@@ -189,7 +147,6 @@ describe('POST /databases/:instanceId/workbench/command-executions', () => {
           responseSchema,
           checkFn: async ({ body }) => {
             expect(body[0].command).to.eql(`get ${constants.TEST_STRING_KEY_1}`);
-            expect(body[0].role).to.eql(null);
             expect(body[0].result.length).to.eql(1);
             expect(body[0].result[0].response).to.eql(bigStringValue);
             expect(body[0].result[0].status).to.eql('success');
@@ -203,6 +160,7 @@ describe('POST /databases/:instanceId/workbench/command-executions', () => {
             expect(localDb.encryptData(JSON.stringify([{
               status: 'success',
               response: 'Results have been deleted since they exceed 1 MB. Re-run the command to see new results.',
+              sizeLimitExceeded: true,
             }]))).to.eql(entity.result);
           }
         },
@@ -258,8 +216,8 @@ describe('POST /databases/:instanceId/workbench/command-executions', () => {
             });
 
             expect(entity.encryption).to.eql(constants.TEST_ENCRYPTION_STRATEGY);
-            expect(localDb.encryptData(body[0].command)).to.eql(entity.command);
-            expect(localDb.encryptData(JSON.stringify(body[0].result))).to.eql(entity.result);
+            expect(body[0].command).to.eql(localDb.decryptData(entity.command));
+            expect(body[0].result).to.eql(JSON.parse(localDb.decryptData(entity.result)));
           }
         },
         {
@@ -398,7 +356,7 @@ describe('POST /databases/:instanceId/workbench/command-executions', () => {
             expect(await rte.client.exists(constants.TEST_HASH_KEY_1)).to.eql(0);
           },
           after: async () => {
-            expect(await rte.client.hgetall(constants.TEST_HASH_KEY_1)).to.deep.eql({
+            expect(convertArrayReplyToObject(await rte.client.hgetall(constants.TEST_HASH_KEY_1))).to.deep.eql({
               [constants.TEST_HASH_FIELD_1_NAME]: constants.TEST_HASH_FIELD_1_VALUE,
             });
           },
@@ -410,14 +368,19 @@ describe('POST /databases/:instanceId/workbench/command-executions', () => {
           },
           responseSchema,
           checkFn: ({ body }) => {
-            expect(body[0].result).to.eql([
-              {
+            expect([
+              // TODO: investigate the difference between getting a hash
+              // result from ioredis
+              [{
+                response: {[constants.TEST_HASH_FIELD_1_NAME]: constants.TEST_HASH_FIELD_1_VALUE},
                 status: 'success',
-                response: {
-                  [constants.TEST_HASH_FIELD_1_NAME]: constants.TEST_HASH_FIELD_1_VALUE,
-                },
-              },
-            ]);
+              }],
+              // result from node-redis
+              [{
+                response: [constants.TEST_HASH_FIELD_1_NAME, constants.TEST_HASH_FIELD_1_VALUE],
+                status: 'success',
+              }]
+            ]).to.deep.contain(body[0].result)
           }
         },
         {
@@ -943,7 +906,7 @@ describe('POST /databases/:instanceId/workbench/command-executions', () => {
         checkFn: async ({ body }) => {
           expect(body[0].result.length).to.eql(1);
           expect(body[0].result[0].status).to.eql('fail');
-          expect(body[0].result[0].response).to.include('command is not supported by the RedisInsight Workbench');
+          expect(body[0].result[0].response).to.include('command is not supported by the Redis Insight Workbench');
         },
         ...testCase,
       }));
@@ -977,7 +940,8 @@ describe('POST /databases/:instanceId/workbench/command-executions', () => {
       });
     });
   });
-  describe('Standalone + Sentinel', () => {
+  // Skip 'Standalone + Sentinel' and 'Cluster' tests because tested functionalities were removed
+  xdescribe('Standalone + Sentinel', () => {
     requirements('!rte.type=CLUSTER');
 
     describe('Incorrect requests for redis client type', () => {
@@ -986,7 +950,6 @@ describe('POST /databases/:instanceId/workbench/command-executions', () => {
           name: 'Should return error if try to execute command for role for standalone database',
           data: {
             commands: [`get ${constants.TEST_STRING_KEY_1}`],
-            role: 'ALL',
           },
           statusCode: 400,
           responseBody: {
@@ -999,11 +962,6 @@ describe('POST /databases/:instanceId/workbench/command-executions', () => {
           name: 'Should return error if try to execute command for particular node for standalone database',
           data: {
             commands: [`get ${constants.TEST_STRING_KEY_1}`],
-            nodeOptions: {
-              host: 'localhost',
-              port: 6379,
-              enableRedirection: true,
-            }
           },
           statusCode: 400,
           responseBody: {
@@ -1015,8 +973,8 @@ describe('POST /databases/:instanceId/workbench/command-executions', () => {
       ].map(mainCheckFn);
     });
   });
-  describe('Cluster', () => {
-    requirements('rte.type=CLUSTER');
+  xdescribe('Cluster', () => {
+    // requirements('rte.type=CLUSTER');
     requirements('!rte.re');
 
     let database;

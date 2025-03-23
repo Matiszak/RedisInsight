@@ -54,7 +54,7 @@ test('Verify that user can see the list of all commands from all clients ran for
     const common_command = 'info';
     const browser_command = 'hset';
     //Start Monitor
-    await browserPage.Profiler.startMonitor();
+    await browserPage.Profiler.startMonitorAndVerifyStart();
     //Send command in CLI
     await browserPage.Cli.getSuccessCommandResultFromCli(cli_command);
     //Check that command from CLI is displayed in monitor
@@ -65,7 +65,7 @@ test('Verify that user can see the list of all commands from all clients ran for
     await browserPage.addHashKey(keyName);
     await browserPage.Profiler.checkCommandInMonitorResults(browser_command);
     //Open Workbench page to create new client
-    await t.click(myRedisDatabasePage.NavigationPanel.workbenchButton);
+    await t.click(browserPage.NavigationPanel.workbenchButton);
     //Send command in Workbench
     await workbenchPage.sendCommandInWorkbench(workbench_command);
     //Check that command from Workbench is displayed in monitor

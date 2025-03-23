@@ -11,6 +11,7 @@ import ERROR_MESSAGES from 'src/constants/error-messages';
 import { RedisErrorCodes } from 'src/constants';
 import { DatabaseService } from 'src/modules/database/database.service';
 import { plainToClass } from 'class-transformer';
+import { sessionMetadataFromRequest } from 'src/common/decorators';
 import { Database } from '../models/database';
 
 @Injectable()
@@ -24,15 +25,20 @@ export class ConnectionMiddleware implements NestMiddleware {
   async use(req: Request, res: Response, next: NextFunction): Promise<any> {
     let { timeout, instanceIdFromReq } = ConnectionMiddleware.getConnectionConfigFromReq(req);
 
+    const sessionMetadata = sessionMetadataFromRequest(req);
+
     if (instanceIdFromReq) {
-      timeout = plainToClass(Database, await this.databaseService.get(instanceIdFromReq))?.timeout;
+      timeout = plainToClass(
+        Database,
+        await this.databaseService.get(sessionMetadata, instanceIdFromReq),
+      )?.timeout;
     }
 
     const cb = (err?: any) => {
       if (err?.code === RedisErrorCodes.Timeout
         || err?.message?.includes('timeout')) {
         next(
-          this.returnError(req, new BadGatewayException(ERROR_MESSAGES.CONNECTION_TIMEOUT)),
+          this.returnError(req, new BadGatewayException(ERROR_MESSAGES.DB_CONNECTION_TIMEOUT)),
         );
       } else {
         next();

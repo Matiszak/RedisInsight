@@ -7,8 +7,8 @@ const ICON_PATH = app.isPackaged
   : path.join(__dirname, '../resources', 'icon.png')
 
 export const AboutPanelOptions = {
-  applicationName: 'RedisInsight-v2',
-  applicationVersion: `${app.getVersion() || '2.36.0'}${
+  applicationName: 'Redis Insight',
+  applicationVersion: `${app.getVersion() || '2.64.1'}${
     !config.isProduction ? `-dev-${process.getCreationTime()}` : ''
   }`,
   copyright: `Copyright © ${new Date().getFullYear()} Redis Ltd.`,

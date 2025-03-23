@@ -1,34 +1,40 @@
 import * as path from 'path';
-import * as archiver from 'archiver';
 import * as fs from 'fs';
+import * as fsp from 'fs/promises';
+
 import { ClientFunction, RequestMock, t } from 'testcafe';
 import { Chance } from 'chance';
-import { apiUrl, commonUrl } from './conf';
+import { apiUrl } from './conf';
+const archiver = require('archiver');
 
 const chance = new Chance();
 
 declare global {
     interface Window {
-      windowId?: string
+        windowId?: string
     }
-  }
+}
 
-
-const settingsApiUrl = `${commonUrl}/api/settings`;
+const settingsApiUrl = `${apiUrl}/settings`;
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; // lgtm[js/disabling-certificate-validation]
 const mockedSettingsResponse = {
-    agreements: {
-        version: '0',
-        eula: false,
-        analytics: false
-    }
+    "theme": null,
+    "dateFormat": null,
+    "timezone": null,
+    "scanThreshold": 10000,
+    "batchSize": 5,
+    "agreements": null
 };
 
 export class Common {
     static mockSettingsResponse(): RequestMock {
         return RequestMock()
             .onRequestTo(settingsApiUrl)
-            .respond(mockedSettingsResponse, 200);
+            .respond(mockedSettingsResponse, 200, {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Credentials': 'true',
+                'Access-Control-Allow-Headers': 'x-window-id'
+            });
     }
 
     static async waitForElementNotVisible(elm: Selector): Promise<void> {
@@ -176,8 +182,8 @@ export class Common {
      * @param expectedUrl Expected link that is compared with actual
      */
     static async checkURL(expectedUrl: string): Promise<void> {
-        const getPageUrl = ClientFunction(() => window.location.href);
-        await t.expect(getPageUrl()).eql(expectedUrl, 'Opened URL is not correct');
+        const getPageUrl = await this.getPageUrl();
+        await t.expect(getPageUrl).eql(expectedUrl, 'Opened URL is not correct');
     }
 
     /**
@@ -185,8 +191,8 @@ export class Common {
      * @param expectedText Expected link that is compared with actual
      */
     static async checkURLContainsText(expectedText: string): Promise<void> {
-        const getPageUrl = ClientFunction(() => window.location.href);
-        await t.expect(getPageUrl()).contains(expectedText, `Opened URL not contains text ${expectedText}`);
+        const getPageUrl = await this.getPageUrl();
+        await t.expect(getPageUrl).contains(expectedText, `Opened URL not contains text ${expectedText}`);
     }
 
     /**
@@ -203,7 +209,7 @@ export class Common {
      * Get current page url
      */
     static async getPageUrl(): Promise<string> {
-        return (await ClientFunction(() => window.location.href))();
+        return (ClientFunction(() => window.location.href))();
     }
 
     /**
@@ -222,6 +228,7 @@ export class Common {
         const parsedJson = JSON.parse(fs.readFileSync(path, 'utf-8'));
         return parsedJson[property];
     }
+
     /**
      * Create Zip archive from folder
      * @param folderPath Path to folder to archive
@@ -242,9 +249,50 @@ export class Common {
 
     /**
       * Delete file from folder
-      * @param folderPath Path to file
+      * @param filePath Path to file
      */
     static async deleteFileFromFolder(filePath: string): Promise<void> {
         fs.unlinkSync(path.join(__dirname, filePath));
+    }
+
+    /**
+      * Delete file from folder if exists
+      * @param filePath Path to file
+     */
+    static async deleteFileFromFolderIfExists(filePath: string): Promise<void> {
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+        }
+    }
+
+    /**
+     * Delete folder
+     * @param filePath Path to file
+     */
+    static async deleteFolderIfExists(filePath: string): Promise<void> {
+        try {
+            await fsp.rm(filePath, { recursive: true, force: true });
+            console.log(`Directory Deleted: ${filePath}`);
+        } catch (error) {
+            console.error(`Failed to delete directory: ${filePath}`, error);
+        }
+    }
+
+    /**
+      * Read file from folder
+      * @param filePath Path to file
+     */
+    static async readFileFromFolder(filePath: string): Promise<string> {
+        return fs.readFileSync(filePath, 'utf8');
+    }
+
+    /**
+      * Get current machine platform
+     */
+    static getPlatform(): { isMac: boolean, isLinux: boolean } {
+        return {
+            isMac: process.platform === 'darwin',
+            isLinux: process.platform === 'linux'
+        };
     }
 }

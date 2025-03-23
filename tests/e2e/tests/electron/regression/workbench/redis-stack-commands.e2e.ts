@@ -1,14 +1,15 @@
 import { t } from 'testcafe';
 import { DatabaseHelper } from '../../../../helpers/database';
-import { WorkbenchPage, MyRedisDatabasePage } from '../../../../pageObjects';
+import { WorkbenchPage, MyRedisDatabasePage, BrowserPage } from '../../../../pageObjects';
 import { commonUrl, ossStandaloneConfig } from '../../../../helpers/conf';
-import { rte } from '../../../../helpers/constants';
+import { ExploreTabs, rte } from '../../../../helpers/constants';
 import { DatabaseAPIRequests } from '../../../../helpers/api/api-database';
 
 const myRedisDatabasePage = new MyRedisDatabasePage();
 const workbenchPage = new WorkbenchPage();
 const databaseHelper = new DatabaseHelper();
 const databaseAPIRequests = new DatabaseAPIRequests();
+const browserPage = new BrowserPage();
 
 const keyNameGraph = 'bikes_graph';
 
@@ -17,7 +18,7 @@ fixture `Redis Stack command in Workbench`
     .page(commonUrl)
     .beforeEach(async t => {
         await databaseHelper.acceptLicenseTermsAndAddDatabaseApi(ossStandaloneConfig);
-        await t.click(myRedisDatabasePage.NavigationPanel.workbenchButton);
+        await t.click(browserPage.NavigationPanel.workbenchButton);
     })
     .afterEach(async() => {
         // Drop key and database
@@ -28,9 +29,11 @@ fixture `Redis Stack command in Workbench`
 //skipped due the inaccessibility of the iframe
 test.skip('Verify that user can switches between Graph and Text for GRAPH command and see results corresponding to their views', async t => {
     // Send Graph command
-    await t.click(workbenchPage.redisStackTutorialsButton);
-    await t.click(workbenchPage.tutorialsWorkingWithGraphLink);
-    await t.click(workbenchPage.createGraphBikeButton);
+    await workbenchPage.NavigationHeader.togglePanel(true);
+    const tutorials = await workbenchPage.InsightsPanel.setActiveTab(ExploreTabs.Tutorials);
+    await t.click(tutorials.redisStackTutorialsButton);
+    await t.click(tutorials.tutorialsWorkingWithGraphLink);
+    await tutorials.runBlockCode('Create a bike node');
     await t.click(workbenchPage.submitCommandButton);
     // Switch to Text view and check result
     await workbenchPage.selectViewTypeText();
@@ -43,9 +46,10 @@ test.skip('Verify that user can switches between Graph and Text for GRAPH comman
 //skipped due to Graph no longer displayed in tutorials
 test.skip('Verify that user can see "No data to visualize" message for Graph command', async t => {
     // Send Graph command
-    await t.click(workbenchPage.redisStackTutorialsButton);
-    await t.click(workbenchPage.tutorialsWorkingWithGraphLink);
-    await t.click(workbenchPage.preselectModelBikeSalesButton);
+    await workbenchPage.NavigationHeader.togglePanel(true);
+    const tutorials = await workbenchPage.InsightsPanel.setActiveTab(ExploreTabs.Tutorials);
+    await t.click(tutorials.redisStackTutorialsButton);
+    await tutorials.runBlockCode('Show all sales per region');
     await t.click(workbenchPage.submitCommandButton);
     // Check result
     await t.switchToIframe(workbenchPage.iframe);

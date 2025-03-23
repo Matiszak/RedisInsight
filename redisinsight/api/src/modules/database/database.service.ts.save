@@ -96,9 +96,9 @@ export class DatabaseService {
    * Check if user is authorized to access database
    * @param id
    */
-  async hasAccess(sessionMetadata: SessionMetadata, id: string): Promise<boolean> {
+  async hasAccess(id: string): Promise<boolean> {
     this.logger.log(`Checking if database with ${id} is accessible by current user.`);
-    let database = this.get(sessionMetadata, id);
+    let database = this.get(id);
     return this.authService.isRedisAccessAuthorized((await database).name);
   }
 
@@ -134,7 +134,13 @@ export class DatabaseService {
    * @param id
    * @param ignoreEncryptionErrors
    */
-  async get(
+  async get(curl --location --request GET 'http://10.208.212.112:7777/audit-2025?delimiter=%2F&list-type=2&prefix=2025-03-21%2F' \
+--header 'authorization: AWS4-HMAC-SHA256 Credential=z0pP0nBXHUwA0mLejf9APCJbKiBryWUhsITPbwlz7aM/20250323/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=d6fe195c0e2f50c0d1b3d65bb30a729cc371519d794a9d98905cad84407402a4' \
+--header 'x-amz-date: 20250323T010609Z' \
+--header 'x-amz-content-sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' \
+--header 'host: domain-gateway1.uat.pl.bcpcorp.dev:8400' \
+--header 'user-agent: aws-sdk-go/1.53.14 (go1.23.6; linux; amd64)' \
+--header 'Accept-Encoding: gzip'MU
     sessionMetadata: SessionMetadata,
     id: string,
     ignoreEncryptionErrors = false,

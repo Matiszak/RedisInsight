@@ -32,7 +32,7 @@ export class RedisConnectionMiddleware implements NestMiddleware {
       throw new NotFoundException(ERROR_MESSAGES.INVALID_DATABASE_INSTANCE_ID);
     }
   
-    const hasAccess = await this.databaseService.hasAccess(instanceIdFromReq);
+    const hasAccess = await this.databaseService.hasAccess(sessionMetadata, instanceIdFromReq);
     if (!hasAccess) {
       throw new UnauthorizedException(ERROR_MESSAGES.NO_ACCESS_TO_DATABASE);
     }

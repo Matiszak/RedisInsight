@@ -12,7 +12,7 @@ const TUTORIALS_CONFIG = config.get('tutorials') as Config['tutorials'];
 
 const CONTENT_CONFIG = config.get('content');
 
-const setXFrameOptionsHeader = (res: Response) => {
+const setXFrameOptionsHeader = (res: Response, path: any, stat: any) => {
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   setContentTypeHeaders(res, path, stat);
 };
